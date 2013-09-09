@@ -2403,6 +2403,14 @@ getPatternForClassTemplateSpecialization(
   } else {
     //   -- If no matches are found, the instantiation is generated
     //      from the primary template.
+
+    // Try first to get it externally:
+    if(ExternalSemaSource *ExtSrc = S.getExternalSource()) {
+      ExtSrc->CompleteType(ClassTemplateSpec);
+      if (ClassTemplateSpec->getDefinition())
+        return nullptr; // happyness
+    }
+
     ClassTemplateDecl *OrigTemplate = Template;
     while (OrigTemplate->getInstantiatedFromMemberTemplate()) {
       // If we've found an explicit specialization of this class template,
