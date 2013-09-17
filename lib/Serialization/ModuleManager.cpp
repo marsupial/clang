@@ -174,7 +174,7 @@ ModuleManager::addModule(StringRef FileName, ModuleKind Type,
     // Try to remove the buffer.  If it can't be removed, then it was already
     // validated by this process.
     if (!PCMCache->tryToRemoveBuffer(NewModule->FileName))
-      FileMgr.invalidateCache(NewModule->File);
+      FileMgr.invalidateCache(const_cast<FileEntry*>(NewModule->File));
     return OutOfDate;
   }
 
@@ -249,7 +249,7 @@ void ModuleManager::removeModules(
     // safely invalidate it anyway).
     if (LoadedSuccessfully.count(&*victim) == 0 &&
         !PCMCache->tryToRemoveBuffer(victim->FileName))
-      FileMgr.invalidateCache(victim->File);
+      FileMgr.invalidateCache(const_cast<FileEntry*>(victim->File));
   }
 
   // Delete the modules.
