@@ -115,7 +115,7 @@ bool DiagnosticsEngine::popMappings(SourceLocation Loc) {
   return true;
 }
 
-void DiagnosticsEngine::Reset() {
+void DiagnosticsEngine::Reset(bool soft /*=false*/) {
   ErrorOccurred = false;
   UncompilableErrorOccurred = false;
   FatalErrorOccurred = false;
@@ -129,6 +129,9 @@ void DiagnosticsEngine::Reset() {
   CurDiagID = ~0U;
   LastDiagLevel = DiagnosticIDs::Ignored;
   DelayedDiagID = 0;
+
+  if (soft)
+    return;
 
   // Clear state related to #pragma diagnostic.
   DiagStates.clear();
