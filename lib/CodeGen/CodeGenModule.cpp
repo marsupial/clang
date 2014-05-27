@@ -745,6 +745,20 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   // Construct the constructor and destructor arrays.
   ConstantInitBuilder builder(*this);
   auto ctors = builder.beginArray(CtorStructTy);
+
+  // Add existing ones:
+  if (llvm::GlobalVariable* OldGlobal
+      = TheModule.getGlobalVariable(GlobalName, true)) {
+    if (const llvm::ConstantArray* CArr =
+        llvm::dyn_cast<llvm::ConstantArray>(OldGlobal->getInitializer())) {
+      uint64_t OldSize = CArr->getType()->getNumElements();
+      for (uint64_t Idx = 0; Idx < OldSize; ++Idx) {
+        ctors.add(CArr->getAggregateElement(Idx));
+      }
+    }
+    OldGlobal->eraseFromParent();
+  }
+
   for (const auto &I : Fns) {
     auto ctor = ctors.beginStruct(CtorStructTy);
     ctor.addInt(Int32Ty, I.Priority);
