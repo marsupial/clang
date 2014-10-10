@@ -40,6 +40,7 @@ class MemoryBuffer;
 namespace clang {
 
 class FileSystemStatCache;
+class HeaderSearch;
 
 /// \brief Cached information about one directory (either on disk or in
 /// the virtual file system).
@@ -73,6 +74,8 @@ class FileEntry {
 
   /// \brief The open file, if it is owned by the \p FileEntry.
   mutable std::unique_ptr<vfs::File> File;
+
+  friend class HeaderSearch;
 
 public:
   FileEntry()
