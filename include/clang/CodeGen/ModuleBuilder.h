@@ -15,6 +15,7 @@
 #define LLVM_CLANG_CODEGEN_MODULEBUILDER_H
 
 #include "clang/AST/ASTConsumer.h"
+#include <string>
 
 namespace llvm {
   class Constant;
@@ -89,6 +90,8 @@ public:
 
   void print(llvm::raw_ostream& out);
   void forgetGlobal(llvm::GlobalValue* GV);
+  llvm::Module* StartModule(const std::string& ModuleName,
+                            llvm::LLVMContext& C)
 };
 
 /// CreateLLVMCodeGen - Create a CodeGenerator instance.
