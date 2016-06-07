@@ -41,6 +41,18 @@
 using namespace clang;
 using namespace CodeGen;
 
+#ifdef CLING_OBJC_SUPPORT
+
+#include "clang/CodeGen/IObjCLookup.h"
+
+namespace cling {
+  namespace objectivec {
+    IObjCLookup* gInstance;
+  }
+}
+
+#endif
+
 namespace {
 
 // FIXME: We should find a nicer way to make the labels for metadata, string
@@ -1034,6 +1046,24 @@ protected:
   /// EmitImageInfo - Emit the image info marker used to encode some module
   /// level information.
   void EmitImageInfo();
+
+  llvm::Constant *
+  emitSelectorBitCast(const Selector &Sel,
+                      const ObjCCommonTypesHelper &ObjCTypes) {
+    return
+#ifdef CLING_OBJC_SUPPORT
+        cling::objectivec::gInstance
+            ? llvm::Constant::getIntegerValue(
+                  ObjCTypes.SelectorPtrTy,
+                  llvm::APInt(
+                      sizeof(uintptr_t) * 8,
+                      uintptr_t(cling::objectivec::gInstance->getSelector(
+                          Sel.getAsString().c_str()))))
+            :
+#endif
+            llvm::ConstantExpr::getBitCast(GetMethodVarName(Sel),
+                                           ObjCTypes.SelectorPtrTy);
+  }
 
 public:
   CGObjCCommonMac(CodeGen::CodeGenModule &cgm) :
@@ -4692,9 +4722,7 @@ Address CGObjCMac::EmitSelectorAddr(CodeGenFunction &CGF, Selector Sel) {
 
   llvm::GlobalVariable *&Entry = SelectorReferences[Sel];
   if (!Entry) {
-    llvm::Constant *Casted =
-      llvm::ConstantExpr::getBitCast(GetMethodVarName(Sel),
-                                     ObjCTypes.SelectorPtrTy);
+    llvm::Constant *Casted = emitSelectorBitCast(Sel, ObjCTypes);
     Entry = CreateMetadataVar(
         "OBJC_SELECTOR_REFERENCES_", Casted,
         "__OBJC,__message_refs,literal_pointers,no_dead_strip", Align, true);
@@ -7099,9 +7127,7 @@ Address CGObjCNonFragileABIMac::EmitSelectorAddr(CodeGenFunction &CGF,
 
   CharUnits Align = CGF.getPointerAlign();
   if (!Entry) {
-    llvm::Constant *Casted =
-      llvm::ConstantExpr::getBitCast(GetMethodVarName(Sel),
-                                     ObjCTypes.SelectorPtrTy);
+    llvm::Constant *Casted = emitSelectorBitCast(Sel, ObjCTypes);
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.SelectorPtrTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
                                      Casted, "OBJC_SELECTOR_REFERENCES_");
