@@ -96,3 +96,13 @@ add_clang_library(clangCodeGen
   clangFrontend
   clangLex
   )
+
+option(CLING_OBJC_SUPPORT "Cling Objective-C support enabled in clang." OFF)
+if(CLING_OBJC_SUPPORT)
+ if (APPLE)
+  message(STATUS "Cling Objective-C support enabled in clang")
+  add_definitions(-DCLING_OBJC_SUPPORT)
+ else()
+  message(WARNING "Cling Objective-C support only available OS X")
+ endif()
+endif()
