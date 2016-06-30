@@ -24,6 +24,7 @@
 #include "clang/Sema/PrettyDeclStackTrace.h"
 #include "clang/Sema/Template.h"
 #include "clang/Sema/TemplateDeduction.h"
+#include "clang/AST/DeclContextInternals.h"
 
 using namespace clang;
 using namespace sema;
@@ -1916,6 +1917,83 @@ static bool DiagnoseUninstantiableTemplate(Sema &S,
   return true;
 }
 
+namespace {
+
+static int isDefined(MemberSpecializationInfo *Info, Decl *Member) {
+  return Info && Info->getInstantiatedFrom() == Member ? 1 : 0;
+}
+
+static int isDefined(Decl *D, Decl *Member) {
+  if (CXXRecordDecl* CD = dyn_cast<CXXRecordDecl>(D)) {
+    if (CD->isInjectedClassName())
+      return -1;
+    return isDefined(CD->getMemberSpecializationInfo(), Member);
+  }
+  if (CXXMethodDecl* MD = dyn_cast<CXXMethodDecl>(D))
+    return isDefined(MD->getMemberSpecializationInfo(), Member);
+
+  return -1;
+}
+
+static bool isDefined(Decl *Member, StoredDeclsMap *Map, Sema &SemaRef,
+                      const MultiLevelTemplateArgumentList &TemplateArgs) {
+  if (NamedDecl* ND = dyn_cast<NamedDecl>(Member)) {
+    StoredDeclsMap::iterator Pos = Map->find(ND->getDeclName());
+    if (Pos == Map->end()) {
+      // If this is a constructor, drop template in name ( Class<T> -> Class )
+      CXXMethodDecl *Meth = dyn_cast<CXXMethodDecl>(Member);
+      if (!Meth) {
+        if (FunctionTemplateDecl *Ft = dyn_cast<FunctionTemplateDecl>(Member)) {
+          Meth = dyn_cast<CXXMethodDecl>(Ft->getTemplatedDecl());
+          if (!Meth)
+            return false;
+        } else
+          return false;
+      }
+      Pos = Map->find(SemaRef.SubstDeclarationNameInfo(Meth->getNameInfo(),
+                                                       TemplateArgs).getName());
+      if (Pos == Map->end())
+        return false;
+    }
+
+    if (Decl* D = Pos->second.getAsDecl())
+      return isDefined(D, Member) != 0;
+
+    if (StoredDeclsList::DeclsTy* Vec = Pos->second.getAsVector()) {
+      for (StoredDeclsList::DeclsTy::const_iterator I = Vec->begin(),
+           E = Vec->end(); I != E; ++I) {
+        if (isDefined(*I, Member)!=0)
+          return true;
+      }
+      return false;
+    }
+  }
+  return true;
+}
+} // anonymous namespace
+
+namespace cling {
+class DeclUnloader {
+public:
+  static StoredDeclsMap* startDefinitionAndGetMap(CXXRecordDecl *R) {
+    StoredDeclsMap *Map = nullptr;
+    if (ClassTemplateSpecializationDecl *Ctsd =
+                       dyn_cast<ClassTemplateSpecializationDecl>(R)) {
+      Map = Ctsd->getLookupPtr();
+      if (Map) {
+        if (!R->DefinitionData)
+          R->startDefinition();
+        else
+          R->IsBeingDefined = true;
+        return Map->empty() ? nullptr : Map;
+      }
+    }
+    R->startDefinition();
+    return nullptr;
+  }
+};
+}
+
 /// \brief Instantiate the definition of a class from a given pattern.
 ///
 /// \param PointOfInstantiation The point of instantiation within the
@@ -1993,7 +2071,7 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
   InstantiateAttrs(TemplateArgs, Pattern, Instantiation);
 
   // Start the definition of this instantiation.
-  Instantiation->startDefinition();
+  StoredDeclsMap * Map = cling::DeclUnloader::startDefinitionAndGetMap(Instantiation);
 
   // The instantiation is visible here, even if it was first declared in an
   // unimported module.
@@ -2029,6 +2107,9 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
       Instantiation->setInvalidDecl();
       continue;
     }
+
+    if (Map && isDefined(Member, Map, *this, TemplateArgs))
+      continue;
 
     Decl *NewMember = Instantiator.Visit(Member);
     if (NewMember) {
@@ -2444,7 +2525,8 @@ bool Sema::InstantiateClassTemplateSpecialization(
     // Try first to get it externally:
     if(getExternalSource()) {
       getExternalSource()->CompleteType(ClassTemplateSpec);
-      if (ClassTemplateSpec->getDefinition())
+      if (ClassTemplateSpec->getDefinition()
+          && ClassTemplateSpec->getSpecializationKind() != TSK_Undeclared)
         return false; // happyness
     }
 
