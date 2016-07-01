@@ -306,8 +306,9 @@ const FileEntry *HeaderSearch::getFileAndSuggestModule(
     bool OpenFile /*= true*/, bool CacheFailures /*= true*/) {
   // If we have a module map that might map this header, load it and
   // check whether we'll have a suggestion for a module.
-  const FileEntry *File = getFileMgr().getFile(FileName, OpenFile,
-                                               CacheFailures);
+  const bool cling = cling::isClient();
+  const FileEntry *File = getFileMgr().getFile(FileName, cling ? OpenFile : true,
+                                                  cling ? CacheFailures : true);
   if (!File)
     return nullptr;
 
@@ -355,7 +356,8 @@ const FileEntry *DirectoryLookup::LookupFile(
     return HS.getFileAndSuggestModule(TmpDir, IncludeLoc, getDir(),
                                       isSystemHeaderDirectory(),
                                       RequestingModule, SuggestedModule,
-                                      OpenFile, cling::isROOT() /*CacheFailures*/);
+                                      cling::isClient() ? OpenFile : true,
+                                      cling::isROOT() ? true : false);
   }
 
   if (isFramework())
@@ -383,7 +385,7 @@ const FileEntry *DirectoryLookup::LookupFile(
     Result = HM->LookupFile(Filename, HS.getFileMgr());
 
   } else {
-    Result = HS.getFileMgr().getFile(Dest, OpenFile);
+    Result = HS.getFileMgr().getFile(Dest, cling::isClient() ? OpenFile : true);
   }
 
   if (Result) {
@@ -631,6 +633,7 @@ const FileEntry *HeaderSearch::LookupFile(
     Module *RequestingModule, ModuleMap::KnownHeader *SuggestedModule,
     bool SkipCache, bool BuildSystemModule,
     bool OpenFile, bool CacheFailures) {
+  const bool cling = cling::isClient();
   if (SuggestedModule)
     *SuggestedModule = ModuleMap::KnownHeader();
     
@@ -651,7 +654,8 @@ const FileEntry *HeaderSearch::LookupFile(
     return getFileAndSuggestModule(Filename, IncludeLoc, nullptr,
                                    /*IsSystemHeaderDir*/false,
                                    RequestingModule, SuggestedModule,
-                                   OpenFile, CacheFailures);
+                                   cling ? OpenFile : true,
+                                   cling ? CacheFailures : true);
   }
 
   // This is the header that MSVC's header search would have found.
@@ -688,7 +692,7 @@ const FileEntry *HeaderSearch::LookupFile(
       if (const FileEntry *FE = getFileAndSuggestModule(
               TmpDir, IncludeLoc, IncluderAndDir.second, IncluderIsSystemHeader,
               RequestingModule, SuggestedModule,
-              OpenFile, CacheFailures)) {
+              cling ? OpenFile : true, cling ? CacheFailures : true)) {
         if (!Includer) {
           assert(First && "only first includer can have no file");
           return FE;
