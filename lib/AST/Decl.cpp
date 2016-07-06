@@ -1373,6 +1373,7 @@ public:
     // that all other computed linkages match, check that the one we just
     // computed also does.
     NamedDecl *Old = nullptr;
+    NamedDecl *FirstT = nullptr;
     for (auto I : D->redecls()) {
       auto *T = cast<NamedDecl>(I);
       if (T == D)
@@ -1381,6 +1382,12 @@ public:
         Old = T;
         break;
       }
+      // CLING: We can get here after unloading a redeclarable, and sadly
+      // it is currently possible to create an infinite loop in the chain.
+      if (!FirstT)
+        FirstT = T;
+      else if (T == FirstT)
+        break;
     }
     assert(!Old || Old->getCachedLinkage() == D->getCachedLinkage());
 #endif
