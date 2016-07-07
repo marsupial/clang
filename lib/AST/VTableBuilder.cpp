@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/AST/VTableBuilder.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
@@ -29,6 +30,17 @@ using namespace clang;
 #define DUMP_OVERRIDERS 0
 
 namespace {
+
+// CLING: cling compares cannonically, clang not
+// This avoids adding extra thunks in codegen
+static bool isInheritedFrom(const CXXMethodDecl *Overrider,
+                        const CXXRecordDecl *PrimaryBase) {
+  if (!cling::isROOT())
+    return Overrider->getParent() == PrimaryBase;
+
+  return Overrider->getParent()->getCanonicalDecl()
+            == PrimaryBase->getCanonicalDecl();
+}
 
 /// BaseOffset - Represents an offset from a derived class to a direct or
 /// indirect base class.
@@ -1179,8 +1191,7 @@ void ItaniumVTableBuilder::ComputeThisAdjustments() {
       continue;
     }
 
-    if (MD->getParent()->getCanonicalDecl()
-        == MostDerivedClass->getCanonicalDecl())
+    if (isInheritedFrom(MD, MostDerivedClass))
       AddThunk(MD, Thunk);
   }
 }
@@ -1367,8 +1378,7 @@ bool ItaniumVTableBuilder::IsOverriderUsed(
   
   // If the overrider is the first base in the primary base chain, we know
   // that the overrider will be used.
-  if (Overrider->getParent()->getCanonicalDecl()
-      == FirstBaseInPrimaryBaseChain->getCanonicalDecl())
+  if (isInheritedFrom(Overrider, FirstBaseInPrimaryBaseChain))
     return true;
 
   ItaniumVTableBuilder::PrimaryBasesSetVectorTy PrimaryBases;
@@ -1431,8 +1441,7 @@ FindNearestOverriddenMethod(const CXXMethodDecl *MD,
     // Now check the overridden methods.
     for (const CXXMethodDecl *OverriddenMD : OverriddenMethods) {
       // We found our overridden method.
-      if (OverriddenMD->getParent()->getCanonicalDecl()
-          == PrimaryBase->getCanonicalDecl())
+      if (isInheritedFrom(OverriddenMD, PrimaryBase))
         return OverriddenMD;
     }
   }
@@ -1539,8 +1548,7 @@ void ItaniumVTableBuilder::AddMethods(
                                   Overrider);
 
           if (ThisAdjustment.Virtual.Itanium.VCallOffsetOffset &&
-              Overrider.Method->getParent()->getCanonicalDecl()
-              == MostDerivedClass->getCanonicalDecl()) {
+              isInheritedFrom(Overrider.Method, MostDerivedClass)) {
 
             // There's no return adjustment from OverriddenMD and MD,
             // but that doesn't mean there isn't one between MD and

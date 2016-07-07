@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_BASIC_SOURCELOCATION_H
 #define LLVM_CLANG_BASIC_SOURCELOCATION_H
 
+#include "clang/Basic/cling.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/PointerLikeTypeTraits.h"
@@ -316,7 +317,8 @@ public:
   /// \returns true if this source location comes before 'Loc', false otherwise.
   bool isBeforeInTranslationUnitThan(FullSourceLoc Loc) const {
     assert(Loc.isValid());
-    if (!SrcMgr) return true; // assume command line is before Loc
+    // CLING: assume command line is before Loc
+    if (!SrcMgr && cling::isClient()) return true;
     assert(SrcMgr == Loc.SrcMgr && "Loc comes from another SourceManager!");
     return isBeforeInTranslationUnitThan((SourceLocation)Loc);
   }

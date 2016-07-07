@@ -10,6 +10,7 @@
 //  This file defines the LangOptions class.
 //
 //===----------------------------------------------------------------------===//
+#include "clang/Basic/cling.h"
 #include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -19,6 +20,10 @@ LangOptions::LangOptions() {
 #define LANGOPT(Name, Bits, Default, Description) Name = Default;
 #define ENUM_LANGOPT(Name, Type, Bits, Default, Description) set##Name(Default);
 #include "clang/Basic/LangOptions.def"
+
+  // CLING: Default to 'bool' not '_Bool' for pretty printing
+  if (cling::isROOT())
+    Bool = 1;
 }
 
 void LangOptions::resetNonModularOptions() {
