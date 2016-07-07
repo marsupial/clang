@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "CodeGenModule.h"
 #include "CGBlocks.h"
 #include "CGCUDARuntime.h"
@@ -721,7 +722,8 @@ void CodeGenModule::AddGlobalDtor(llvm::Function *Dtor, int Priority) {
 }
 
 void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
-  if (Fns.empty())
+  const bool cling = cling::isClient();
+  if (cling && Fns.empty())
     return;
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
@@ -731,21 +733,22 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   llvm::StructType *CtorStructTy = llvm::StructType::get(
       Int32Ty, llvm::PointerType::getUnqual(CtorFTy), VoidPtrTy, nullptr);
 
-
   // Construct the constructor and destructor arrays.
   SmallVector<llvm::Constant *, 8> Ctors;
 
-  // Add existing ones:
-  if (llvm::GlobalVariable* OldGlobal
-      = TheModule.getGlobalVariable(GlobalName, true)) {
-    if (const llvm::ConstantArray* CArr =
-        llvm::dyn_cast<llvm::ConstantArray>(OldGlobal->getInitializer())) {
-      uint64_t OldSize = CArr->getType()->getNumElements();
-      for (uint64_t Idx = 0; Idx < OldSize; ++Idx) {
-        Ctors.push_back(CArr->getAggregateElement(Idx));
+  if (cling) {
+    // Add existing ones:
+    if (llvm::GlobalVariable* OldGlobal
+        = TheModule.getGlobalVariable(GlobalName, true)) {
+      if (const llvm::ConstantArray* CArr =
+          llvm::dyn_cast<llvm::ConstantArray>(OldGlobal->getInitializer())) {
+        uint64_t OldSize = CArr->getType()->getNumElements();
+        for (uint64_t Idx = 0; Idx < OldSize; ++Idx) {
+          Ctors.push_back(CArr->getAggregateElement(Idx));
+        }
       }
+      OldGlobal->eraseFromParent();
     }
-    OldGlobal->eraseFromParent();
   }
 
   for (const auto &I : Fns) {
@@ -765,7 +768,8 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
                              llvm::ConstantArray::get(AT, Ctors),
                              GlobalName);
   }
-  Fns.clear();
+  if (cling)
+    Fns.clear();
 }
 
 llvm::GlobalValue::LinkageTypes
@@ -956,13 +960,15 @@ void CodeGenModule::SetCommonAttributes(const Decl *D,
 
   if (D && D->hasAttr<UsedAttr>())
     addUsedGlobal(GV);
-  else if (const FunctionDecl* FD = dyn_cast_or_null<FunctionDecl>(D)) {
+  else if (cling::isROOT()) {
+    if (const FunctionDecl* FD = dyn_cast_or_null<FunctionDecl>(D)) {
      if (FD->isFromASTFile() && GV->hasLinkOnceODRLinkage()) {
         // An inline function.
         // Mark them used such that the DeclReverter does not
         // unload it.
         addUsedGlobal(GV);
      }
+    }
   }
 }
 
@@ -1155,9 +1161,11 @@ static void emitUsed(CodeGenModule &CGM, StringRef Name,
 
 void CodeGenModule::emitLLVMUsed() {
   emitUsed(*this, "llvm.used", LLVMUsed);
-  LLVMUsed.clear();
   emitUsed(*this, "llvm.compiler.used", LLVMCompilerUsed);
-  LLVMCompilerUsed.clear();
+  if (cling::isROOT()) {
+    LLVMUsed.clear();
+    LLVMCompilerUsed.clear();
+  }
 }
 
 void CodeGenModule::AppendLinkerOptions(StringRef Opts) {
@@ -1374,21 +1382,23 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
 
 llvm::Constant *CodeGenModule::EmitAnnotationUnit(SourceLocation Loc) {
   SourceManager &SM = getContext().getSourceManager();
-  //PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-  //if (PLoc.isValid())
-  //  return EmitAnnotationString(PLoc.getFilename());
+  if (!cling::isROOT()) {
+    PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+    if (PLoc.isValid())
+      return EmitAnnotationString(PLoc.getFilename());
+  }
   return EmitAnnotationString(SM.getBufferName(Loc));
 }
 
 llvm::Constant *CodeGenModule::EmitAnnotationLineNo(SourceLocation L) {
-  return llvm::ConstantInt::get(Int32Ty, 1);
-#if 0
+  if (cling::isROOT())
+    return llvm::ConstantInt::get(Int32Ty, 1);
+
   SourceManager &SM = getContext().getSourceManager();
   PresumedLoc PLoc = SM.getPresumedLoc(L);
   unsigned LineNo = PLoc.isValid() ? PLoc.getLine() :
     SM.getExpansionLineNumber(L);
   return llvm::ConstantInt::get(Int32Ty, LineNo);
-#endif
 }
 
 llvm::Constant *CodeGenModule::EmitAnnotateAttr(llvm::GlobalValue *GV,
@@ -1970,7 +1980,8 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       // DeferredDeclsToEmit list, and remove it from DeferredDecls (since we
       // don't need it anymore).
       addDeferredDeclToEmit(F, DDI->second);
-      EmittedDeferredDecls[F] = std::make_pair(DDI->first, DDI->second);
+      if (cling::isClient())
+        EmittedDeferredDecls[F] = std::make_pair(DDI->first, DDI->second);
       DeferredDecls.erase(DDI);
 
       // Otherwise, there are cases we have to worry about where we're
@@ -2168,7 +2179,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     // Move the potentially referenced deferred decl to the DeferredDeclsToEmit
     // list, and remove it from DeferredDecls (since we don't need it anymore).
     addDeferredDeclToEmit(GV, DDI->second);
-    EmittedDeferredDecls[GV] = std::make_pair(DDI->first, DDI->second);
+    if (cling::isClient())
+      EmittedDeferredDecls[GV] = std::make_pair(DDI->first, DDI->second);
     DeferredDecls.erase(DDI);
   }
 
@@ -4163,7 +4175,7 @@ void CodeGenFunction::EmitDeclMetadata() {
 void CodeGenModule::EmitVersionIdentMetadata() {
   llvm::NamedMDNode *IdentMetadata =
     TheModule.getOrInsertNamedMetadata("llvm.ident");
-  if (IdentMetadata->getNumOperands() > 0)
+  if (IdentMetadata->getNumOperands() > 0 && cling::isClient())
     return;
 
   std::string Version = getClangFullVersion();
