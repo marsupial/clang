@@ -1078,6 +1078,10 @@ private:
   serialization::InputFile getInputFile(ModuleFile &F, unsigned ID,
                                         bool Complain = true);
 
+  /// \brief Flag whether we've complained already that the pch being read
+  /// in cling was written by clang.
+  bool ClingComplainedOnce;
+
 public:
   void ResolveImportedPath(ModuleFile &M, std::string &Filename);
   static void ResolveImportedPath(std::string &Filename, StringRef Prefix);

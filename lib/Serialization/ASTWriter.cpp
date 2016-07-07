@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Serialization/ASTWriter.h"
 #include "clang/Serialization/ModuleFileExtension.h"
 #include "ASTCommon.h"
@@ -3997,7 +3998,7 @@ void ASTWriter::AddToken(const Token &Tok, RecordDataImpl &Record) {
   Record.push_back(Tok.getFlags());
   // FIXME: cling needs this to occur if cling::isClient or not for reading in
   // later, but it seriously bloats a pch
-  if (Tok.isLiteral())
+  if (Tok.isLiteral() && cling::isROOT())
      AddString(Tok.getLiteralData(), Record);
 }
 
