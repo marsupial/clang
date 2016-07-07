@@ -1545,7 +1545,7 @@ bool ASTReader::ReadBlockAbbrevs(BitstreamCursor &Cursor, unsigned BlockID) {
 }
 
 Token ASTReader::ReadToken(ModuleFile &F, const RecordDataImpl &Record,
-                           unsigned &Idx) {
+                           unsigned &Idx, bool macro) {
   Token Tok;
   Tok.startToken();
   Tok.setLocation(ReadSourceLocation(F, Record, Idx));
@@ -1574,7 +1574,7 @@ Token ASTReader::ReadToken(ModuleFile &F, const RecordDataImpl &Record,
         Error(diag::warn_pch_rebuild_required, getOriginalSourceFile(),
               "with cling");
       }
-    } else if (Record.size() > Idx) {
+    } else if (macro && Record.size() > Idx) {
       // cling PCH in clang: just discard the data
       const_cast<RecordDataImpl &>(Record).resize(Idx);
       if (!ClingComplainedOnce) {
@@ -1690,7 +1690,7 @@ MacroInfo *ASTReader::ReadMacroRecord(ModuleFile &F, uint64_t Offset) {
       if (!Macro) break;
 
       unsigned Idx = 0;
-      Token Tok = ReadToken(F, Record, Idx);
+      Token Tok = ReadToken(F, Record, Idx, true);
       Macro->AddTokenToBody(Tok);
       break;
     }
