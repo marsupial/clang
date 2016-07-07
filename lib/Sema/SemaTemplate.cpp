@@ -1511,7 +1511,7 @@ bool Sema::CheckTemplateParameterList(TemplateParameterList *NewParams,
     }
 
     const bool ROOT = cling::isROOT();
-    if (ROOT && RedundantDefaultArg &&
+    if (RedundantDefaultArg && ROOT &&
         (((*OldParam)->hasAttr<AnnotateAttr>() &&
          (*OldParam)->getAttr<AnnotateAttr>()->getAnnotation() == "rootmap") ||
         ((*NewParam)->hasAttr<AnnotateAttr>() &&
@@ -3250,14 +3250,12 @@ bool Sema::CheckTemplateTypeArgument(TemplateTypeParmDecl *Param,
   if (CheckTemplateArgument(Param, TSI))
     return true;
 
-  // Add the converted template type argument.
-  if (!cling::isClient())
-    ArgType = Context.getCanonicalType(ArgType);
-  else if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst())
-    ArgType = Context.getCanonicalType(ArgType);
-  else
+  if (cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst())
     ArgType = ArgType.getCanonicalType();
-
+  else // CLING: Improper indentation is better for diff
+  // Add the converted template type argument.
+  ArgType = Context.getCanonicalType(ArgType);
+  
   // Objective-C ARC:
   //   If an explicitly-specified template argument type is a lifetime type
   //   with no lifetime qualifier, the __strong lifetime qualifier is inferred.
@@ -4331,22 +4329,13 @@ bool Sema::CheckTemplateArgument(TemplateTypeParmDecl *Param,
 
   if (Arg->isVariablyModifiedType()) {
     return Diag(SR.getBegin(), diag::err_variably_modified_template_arg) << Arg;
-  } else {
-    if (!cling::isClient()) {
-      if (Context.hasSameUnqualifiedType(Arg, Context.OverloadTy)) {
-        return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
-      }
+  } else if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+    if (Context.hasSameUnqualifiedType(Arg, Context.OverloadTy)) {
+      return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
     }
-    else if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
-      if (Context.hasSameUnqualifiedType(Arg, Context.OverloadTy)) {
-        return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
-      }
-    } else {
-      if (Context.hasSameUnqualifiedType(Arg.getCanonicalType(),
+  } else if (Context.hasSameUnqualifiedType(Arg.getCanonicalType(),
                                        Context.OverloadTy)) {
-        return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
-      }
-    }
+    return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
   }
 
   // C++03 [temp.arg.type]p2:
@@ -4368,9 +4357,7 @@ bool Sema::CheckTemplateArgument(TemplateTypeParmDecl *Param,
 
   if (NeedsCheck) {
     UnnamedLocalNoLinkageFinder Finder(*this, SR);
-    if (!cling::isClient()) {
-      (void)Finder.Visit(Context.getCanonicalType(Arg));
-    } else if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+    if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
       (void)Finder.Visit(Context.getCanonicalType(Arg));
     } else {
       (void)Finder.Visit(Arg.getCanonicalType());
