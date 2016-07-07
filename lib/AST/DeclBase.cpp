@@ -1221,7 +1221,7 @@ bool DeclContext::containsDecl(Decl *D) const {
           (D->NextInContextAndBits.getPointer() || D == LastDecl));
 }
 
-void DeclContext::removeDecl(Decl *D) {
+void DeclContext::removeDecl(Decl *D, llvm::SmallVector<DeclContext*,4> *errs) {
   assert(D->getLexicalDeclContext() == this &&
          "decl being removed from non-lexical context");
   assert((D->NextInContextAndBits.getPointer() || D == LastDecl) &&
@@ -1259,12 +1259,15 @@ void DeclContext::removeDecl(Decl *D) {
       StoredDeclsMap *Map = DC->getPrimaryContext()->LookupPtr;
       if (Map) {
         StoredDeclsMap::iterator Pos = Map->find(ND->getDeclName());
-        assert((DC->hasExternalVisibleStorage() || Pos != Map->end()) && "no lookup entry for decl");
         if (Pos != Map->end()) {
           StoredDeclsList::DeclsTy* Vec = Pos->second.getAsVector();
           if ((Vec && std::find(Vec->begin(), Vec->end(), ND) != Vec->end())
               || Pos->second.getAsDecl() == ND)
             Pos->second.remove(ND);
+        } else if (errs) {
+          errs->push_back(DC);
+        } else {
+          assert(Pos != Map->end() && "no lookup entry for decl");
         }
       }
     } while (DC->isTransparentContext() && (DC = DC->getParent()));
