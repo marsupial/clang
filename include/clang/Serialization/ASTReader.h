@@ -45,6 +45,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_set>
 
 namespace llvm {
   class BitstreamCursor;
@@ -605,7 +606,7 @@ private:
   llvm::DenseSet<LoadedMacroInfo> LoadedUndefs;
 
   /// \brief Token literal data loaded and owned by us.
-  std::vector<std::string *> TokenLiteralDataLoaded;
+  std::unordered_set<std::string> TokenLiteralDataLoaded;
 
   typedef ContinuousRangeMap<serialization::MacroID, ModuleFile *, 4>
     GlobalMacroMapType;
