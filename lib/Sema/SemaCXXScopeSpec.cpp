@@ -534,14 +534,11 @@ bool Sema::BuildCXXNestedNameSpecifier(Scope *S,
     // nested-name-specifier.
 
     // The declaration context must be complete.
-    if (!cling::isROOT()) {
-      if (!LookupCtx->isDependentContext() &&
-          RequireCompleteDeclContext(SS, LookupCtx))
-        return true;
-    } else if (!LookupCtx->isDependentContext()) {
-      if (RequireCompleteDeclContext(SS, LookupCtx)) {
-        return true;
-      } else if (TagDecl* TD = dyn_cast<TagDecl>(LookupCtx)) {
+    if (!LookupCtx->isDependentContext() &&
+        RequireCompleteDeclContext(SS, LookupCtx))
+      return true;
+    else if (cling::isROOT() && !LookupCtx->isDependentContext()) {
+      if (TagDecl* TD = dyn_cast<TagDecl>(LookupCtx)) {
         // Update the DeclContext to point to the Tag definition.
         LookupCtx = TD->getDefinition();
       }

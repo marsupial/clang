@@ -1378,11 +1378,12 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
 
 llvm::Constant *CodeGenModule::EmitAnnotationUnit(SourceLocation Loc) {
   SourceManager &SM = getContext().getSourceManager();
-  if (!cling::isROOT()) {
-    PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-    if (PLoc.isValid())
-      return EmitAnnotationString(PLoc.getFilename());
-  }
+  if (cling::isROOT())
+    return EmitAnnotationString(SM.getBufferName(Loc));
+
+  PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+  if (PLoc.isValid())
+    return EmitAnnotationString(PLoc.getFilename());
   return EmitAnnotationString(SM.getBufferName(Loc));
 }
 

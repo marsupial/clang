@@ -360,11 +360,14 @@ void Preprocessor::HandlePragmaOnce(Token &OnceTok) {
     return;
   }
 
-  if (!cling::isClient() || getCurrentFileLexer()->getFileEntry()) {
-    // Get the current file lexer we're looking at.  Ignore _Pragma 'files' etc.
-    // Mark the file as a once-only file now.
-    HeaderInfo.MarkFileIncludeOnce(getCurrentFileLexer()->getFileEntry());
+  if (cling::isClient()) {
+    if (getCurrentFileLexer()->getFileEntry())
+      HeaderInfo.MarkFileIncludeOnce(getCurrentFileLexer()->getFileEntry());
+    return;
   }
+  // Get the current file lexer we're looking at.  Ignore _Pragma 'files' etc.
+  // Mark the file as a once-only file now.
+  HeaderInfo.MarkFileIncludeOnce(getCurrentFileLexer()->getFileEntry());
 }
 
 void Preprocessor::HandlePragmaMark() {
@@ -750,13 +753,16 @@ void Preprocessor::AddPragmaHandler(StringRef Namespace,
     }
   }
 
+  if (cling::isClient()) {
+    if (!InsertNS->FindHandler(Handler->getName()))
+      InsertNS->AddPragma(Handler);
+    return;
+  }
+
   // Check to make sure we don't already have a pragma for this identifier.
-  if (!cling::isClient()) {
-    assert(!InsertNS->FindHandler(Handler->getName()) &&
-           "Pragma handler already exists for this identifier!");
-    InsertNS->AddPragma(Handler);
-  } else if (!InsertNS->FindHandler(Handler->getName()))
-    InsertNS->AddPragma(Handler);
+  assert(!InsertNS->FindHandler(Handler->getName()) &&
+         "Pragma handler already exists for this identifier!");
+  InsertNS->AddPragma(Handler);
 }
 
 /// RemovePragmaHandler - Remove the specific pragma handler from the
