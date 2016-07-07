@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Sema/SemaInternal.h"
 #include "TypeLocBuilder.h"
 #include "clang/AST/ASTConsumer.h"
@@ -290,7 +291,11 @@ ParsedType Sema::getTypeName(const IdentifierInfo &II, SourceLocation NameLoc,
       return nullptr;
     }
 
-    if (!LookupCtx->isDependentContext()) {
+    if (!cling::isROOT()) {
+      if (!LookupCtx->isDependentContext() &&
+          RequireCompleteDeclContext(*SS, LookupCtx))
+        return nullptr;
+    } else if (!LookupCtx->isDependentContext()) {
       if (RequireCompleteDeclContext(*SS, LookupCtx)) {
         return nullptr;
       } else if (TagDecl* TD = dyn_cast<TagDecl>(LookupCtx)) {
@@ -12051,11 +12056,11 @@ bool Sema::CheckEnumRedeclaration(
   } else if (!IsFixed && Prev->isFixed() && !Prev->getIntegerTypeSourceInfo()) {
     ;
   } else if (IsFixed != Prev->isFixed()) {
-#if 0
-    Diag(EnumLoc, diag::err_enum_redeclare_fixed_mismatch)
-      << Prev->isFixed();
-    Diag(Prev->getLocation(), diag::note_previous_declaration);
-#endif
+    if (!cling::isROOT()) {
+      Diag(EnumLoc, diag::err_enum_redeclare_fixed_mismatch)
+        << Prev->isFixed();
+      Diag(Prev->getLocation(), diag::note_previous_declaration);
+    }
     return true;
   }
 

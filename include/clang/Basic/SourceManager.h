@@ -35,6 +35,7 @@
 #ifndef LLVM_CLANG_BASIC_SOURCEMANAGER_H
 #define LLVM_CLANG_BASIC_SOURCEMANAGER_H
 
+#include "clang/Basic/cling.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/SourceLocation.h"
@@ -1534,8 +1535,10 @@ public:
       if (Invalid) *Invalid = true;
       return LocalSLocEntryTable[0];
     }
+    if (!cling::isClient())
+      return getSLocEntryByID(FID.ID, Invalid);
 
-    // If we invalidated the cache we need to update the SLocEntry, too.
+    // CLING: If we invalidated the cache we need to update the SLocEntry, too.
     // FIXME: This only deals with files coming not from PCH
     const SrcMgr::SLocEntry& SLocE = getSLocEntryByID(FID.ID, Invalid);
     if (Invalid && !*Invalid && SLocE.isFile()) {
