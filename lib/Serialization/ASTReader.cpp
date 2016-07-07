@@ -1472,16 +1472,37 @@ Token ASTReader::ReadToken(ModuleFile &F, const RecordDataImpl &Record,
     Tok.setIdentifierInfo(II);
   Tok.setKind((tok::TokenKind)Record[Idx++]);
   Tok.setFlag((Token::TokenFlags)Record[Idx++]);
-  // FIXME: cling writes out string literals, but theres a chance the PCH
-  // came from a pure version of clang, in which case we shouldn't try to pull
-  // out data thats not there Tok.isLiteral() && RD.size() == Idx
+
+  // CLING: cling writes out string literals, but clang not.
   if (Tok.isLiteral()) {
-    Tok.setLiteralData(
-        TokenLiteralDataLoaded
-            .insert(
-                ReadString(reinterpret_cast<const RecordData &>(Record), Idx))
-            .first->c_str());
+    if (cling::isClient()) {
+      if (Record.size() > Idx) {
+        // cling wrote it and cling is reading it
+        Tok.setLiteralData(
+            TokenLiteralDataLoaded
+                .insert(ReadString(reinterpret_cast<const RecordData &>(Record),
+                                   Idx))
+                .first->c_str());
+      } else if (!ClingComplainedOnce) {
+        // clang wrote it but cling is the host, as long as cling was invoked
+        // with the same flags that clang was, there won't be a problem.
+        // If the invocation flags are different, then we'll error out later.
+        // Let's at least tell the user how it should have been done.
+        ClingComplainedOnce = true;
+        Error(diag::warn_pch_rebuild_required, getOriginalSourceFile(),
+              "with cling");
+      }
+    } else if (Record.size() > Idx) {
+      // cling PCH in clang: just discard the data
+      const_cast<RecordDataImpl &>(Record).resize(Idx);
+      if (!ClingComplainedOnce) {
+        ClingComplainedOnce = true;
+        Error(diag::warn_pch_rebuild_required, getOriginalSourceFile(),
+              "with clang");
+      }
+    } // else clang PCH in clang
   }
+
   return Tok;
 }
 
@@ -8847,6 +8868,7 @@ ASTReader::ASTReader(
 
     ModuleFileExtensions.insert({BlockName, Ext});
   }
+  ClingComplainedOnce = false;
 }
 
 ASTReader::~ASTReader() {
