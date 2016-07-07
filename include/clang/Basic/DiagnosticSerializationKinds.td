@@ -181,6 +181,10 @@ def warn_module_system_bit_conflict : Warning<
   "as a non-system module; any difference in diagnostic options will be ignored">,
   InGroup<ModuleConflict>;
 
+def warn_pch_rebuild_required : Warning<
+  "please rebuild precompiled header '%0' with %1">,
+  InGroup<DiagGroup<"invalid-pch">>;
+
 } // let CategoryName
 } // let Component
 
