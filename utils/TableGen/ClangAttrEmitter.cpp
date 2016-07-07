@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Support/cling.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/iterator_range.h"
@@ -425,13 +426,22 @@ namespace {
     }
 
     void writeValue(raw_ostream &OS) const override {
-      OS << "R\\\"ATTRDUMP(\" << get" << getUpperName()
-         << "() << \")ATTRDUMP\\\"";
+      if (cling::isClient()) {
+        OS << "R\\\"ATTRDUMP(\" << get" << getUpperName()
+           << "() << \")ATTRDUMP\\\"";
+        return;
+      }
+      OS << "\\\"\" << get" << getUpperName() << "() << \"\\\"";
     }
 
     void writeDump(raw_ostream &OS) const override {
-      OS << "    OS << \" R\\\"ATTRDUMP(\" << SA->get" << getUpperName()
-         << "() << \")ATTRDUMP\\\"\";\n";
+      if (cling::isClient()) {
+        OS << "    OS << \" R\\\"ATTRDUMP(\" << SA->get" << getUpperName()
+           << "() << \")ATTRDUMP\\\"\";\n";
+        return;
+      }
+      OS << "    OS << \" \\\"\" << SA->get" << getUpperName()
+         << "() << \"\\\"\";\n";
     }
   };
 

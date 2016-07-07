@@ -14,6 +14,7 @@
 #ifndef LLVM_CLANG_LIB_SEMA_TREETRANSFORM_H
 #define LLVM_CLANG_LIB_SEMA_TREETRANSFORM_H
 
+#include "clang/Basic/cling.h"
 #include "TypeLocBuilder.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclObjC.h"
@@ -36,8 +37,6 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
-
-#include "HackForDefaultTemplateArg.h"
 
 namespace clang {
 using namespace sema;
@@ -3503,13 +3502,13 @@ TreeTransform<Derived>::TransformNestedNameSpecifierLoc(
       if (!TL)
         return NestedNameSpecifierLoc();
 
-      // When using ROOT the type being passed can still be sugared
-      // so that we can construct template instance name with template
-      // default added that still uses the original spelling of the 
-      // arguments. [This is part of adding support for opaque typedef
-      // and 'shorter' names]
       QualType tlType = TL.getType();
-      if (HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+      if (cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+        // When using ROOT the type being passed can still be sugared
+        // so that we can construct template instance name with template
+        // default added that still uses the original spelling of the 
+        // arguments. [This is part of adding support for opaque typedef
+        // and 'shorter' names]
         tlType = tlType->getCanonicalTypeInternal().getUnqualifiedType();
       }
       if (tlType->isDependentType() || tlType->isRecordType() ||

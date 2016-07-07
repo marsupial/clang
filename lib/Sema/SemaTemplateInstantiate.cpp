@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===/
 
+#include "clang/Basic/cling.h"
 #include "clang/Sema/SemaInternal.h"
 #include "TreeTransform.h"
 #include "clang/AST/ASTConsumer.h"
@@ -1414,7 +1415,7 @@ TemplateInstantiator::TransformTemplateTypeParmType(TypeLocBuilder &TLB,
     // TODO: only do this uniquing once, at the start of instantiation.
     QualType Result
       = getSema().Context.getSubstTemplateTypeParmType(T, Replacement,
-                          HackForDefaultTemplateArg::AllowNonCanonicalSubst());
+                    cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst());
     SubstTemplateTypeParmTypeLoc NewTL
       = TLB.push<SubstTemplateTypeParmTypeLoc>(Result);
     NewTL.setNameLoc(TL.getNameLoc());
@@ -1460,7 +1461,7 @@ TemplateInstantiator::TransformSubstTemplateTypeParmPackType(
   Result = getSema().Context.getSubstTemplateTypeParmType(
                                       TL.getTypePtr()->getReplacedParameter(),
                                                           Result,
-                           HackForDefaultTemplateArg::AllowNonCanonicalSubst());
+                    cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst());
   SubstTemplateTypeParmTypeLoc NewTL
     = TLB.push<SubstTemplateTypeParmTypeLoc>(Result);
   NewTL.setNameLoc(TL.getNameLoc());
@@ -2041,8 +2042,12 @@ Sema::InstantiateClass(SourceLocation PointOfInstantiation,
   // Pull attributes from the pattern onto the instantiation.
   InstantiateAttrs(TemplateArgs, Pattern, Instantiation);
 
+  StoredDeclsMap *Map = nullptr;
   // Start the definition of this instantiation.
-  StoredDeclsMap * Map = cling::DeclUnloader::startDefinitionAndGetMap(Instantiation);
+  if (!cling::isClient())
+    Instantiation->startDefinition();
+  else
+    Map = cling::DeclUnloader::startDefinitionAndGetMap(Instantiation);
 
   // The instantiation is visible here, even if it was first declared in an
   // unimported module.
@@ -2488,12 +2493,14 @@ getPatternForClassTemplateSpecialization(
     //   -- If no matches are found, the instantiation is generated
     //      from the primary template.
 
-    // Try first to get it externally:
-    if(ExternalSemaSource *ExtSrc = S.getExternalSource()) {
-      ExtSrc->CompleteType(ClassTemplateSpec);
-      if (ClassTemplateSpec->getDefinition()
-          && ClassTemplateSpec->getSpecializationKind() != TSK_Undeclared)
-        return nullptr; // happyness
+    if (cling::isROOT()) {
+      // Try first to get it externally:
+      if(ExternalSemaSource *ExtSrc = S.getExternalSource()) {
+        ExtSrc->CompleteType(ClassTemplateSpec);
+        if (ClassTemplateSpec->getDefinition()
+            && ClassTemplateSpec->getSpecializationKind() != TSK_Undeclared)
+          return nullptr; // happyness
+      }
     }
 
     ClassTemplateDecl *OrigTemplate = Template;

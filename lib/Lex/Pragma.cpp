@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Lex/Pragma.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -380,7 +381,7 @@ void Preprocessor::HandlePragmaOnce(Token &OnceTok) {
     return;
   }
 
-  if (getCurrentFileLexer()->getFileEntry()) {
+  if (!cling::isClient() || getCurrentFileLexer()->getFileEntry()) {
     // Get the current file lexer we're looking at.  Ignore _Pragma 'files' etc.
     // Mark the file as a once-only file now.
     HeaderInfo.MarkFileIncludeOnce(getCurrentFileLexer()->getFileEntry());
@@ -770,11 +771,12 @@ void Preprocessor::AddPragmaHandler(StringRef Namespace,
   }
 
   // Check to make sure we don't already have a pragma for this identifier.
-  // assert(!InsertNS->FindHandler(Handler->getName()) &&
-  //        "Pragma handler already exists for this identifier!");
-
-  if (!InsertNS->FindHandler(Handler->getName()))
-     InsertNS->AddPragma(Handler);
+  if (!cling::isClient()) {
+    assert(!InsertNS->FindHandler(Handler->getName()) &&
+           "Pragma handler already exists for this identifier!");
+    InsertNS->AddPragma(Handler);
+  } else if (!InsertNS->FindHandler(Handler->getName()))
+    InsertNS->AddPragma(Handler);
 }
 
 /// RemovePragmaHandler - Remove the specific pragma handler from the

@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/FileManager.h"
@@ -422,8 +423,12 @@ void SourceManager::invalidateCache(FileID FID, bool callFM) {
       CC->replaceBuffer(0, /*free*/true);
     }
   }
-  if (callFM)
-    getFileManager().invalidateCache(const_cast<FileEntry*>(Entry), this);
+  if (cling::isClient()) {
+    if(callFM)
+      getFileManager().invalidateCache(const_cast<FileEntry*>(Entry), this);
+    return;
+  }
+  getFileManager().invalidateCache(const_cast<FileEntry*>(Entry));
 }
 
 /// getOrCreateContentCache - Create or return a cached ContentCache for the
@@ -1459,6 +1464,9 @@ StringRef SourceManager::getBufferName(SourceLocation Loc,
                                        bool *Invalid) const {
   if (isInvalid(Loc, Invalid)) return "<invalid loc>";
 
+  if (!cling::isROOT())
+    return getBuffer(getFileID(Loc), Invalid)->getBufferIdentifier();
+
   // Try to get the name without reading the buffer.
   FileID FID = getFileID(Loc);
   const SrcMgr::SLocEntry &Entry = getSLocEntry(FID, Invalid);
@@ -2149,8 +2157,10 @@ bool SourceManager::isBeforeInTranslationUnit(SourceLocation LHS,
       return LIsScratch;
     return LOffs.second < ROffs.second;
   }
-  //AXEL: Work around diags from include chains not rooted in main file.
-  //AXEL: llvm_unreachable("Unsortable locations found");
+  if (!cling::isROOT())
+    llvm_unreachable("Unsortable locations found");
+
+  //CLING: Work around diags from include chains not rooted in main file.
   assert(0 && "Unsortable locations found");
   return LOffs.first < ROffs.first;
 }

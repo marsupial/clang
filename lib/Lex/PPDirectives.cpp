@@ -12,6 +12,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -772,7 +773,7 @@ const FileEntry *Preprocessor::LookupFile(
   SmallVector<std::pair<const FileEntry *, const DirectoryEntry *>, 16>
       Includers;
   bool BuildSystemModule = false;
-  if (!FromDir && !FromFile && getCurrentFileLexer()) {
+  if (!FromDir && !FromFile && (!cling::isClient() || getCurrentFileLexer())) {
     FileID FID = getCurrentFileLexer()->getFileID();
     const FileEntry *FileEnt = SourceMgr.getFileEntryForID(FID);
 
@@ -2608,12 +2609,17 @@ void Preprocessor::HandleUndefDirective() {
   if (MI->isWarnIfUnused())
     WarnUnusedMacroLocs.erase(MI->getDefinitionLoc());
 
-  UndefMacroDirective *MD =
-      AllocateUndefMacroDirective(MacroNameTok.getLocation());
-  appendMacroDirective(MacroNameTok.getIdentifierInfo(), MD);
+  if (cling::isClient()) {
+    UndefMacroDirective *MD =
+        AllocateUndefMacroDirective(MacroNameTok.getLocation());
+    appendMacroDirective(MacroNameTok.getIdentifierInfo(), MD);
+    if (Callbacks)
+      Callbacks->MacroDefined(MacroNameTok, MD);
+    return;
+  }
 
-  if (Callbacks)
-    Callbacks->MacroDefined(MacroNameTok, MD);
+  appendMacroDirective(MacroNameTok.getIdentifierInfo(),
+                       AllocateUndefMacroDirective(MacroNameTok.getLocation()));
 }
 
 //===----------------------------------------------------------------------===//

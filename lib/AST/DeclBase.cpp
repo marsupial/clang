@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/AST/DeclBase.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTMutationListener.h"
@@ -1299,18 +1300,24 @@ void DeclContext::removeDecl(Decl *D, llvm::SmallVectorImpl<DeclContext*> *errs)
   if (isa<NamedDecl>(D)) {
     NamedDecl *ND = cast<NamedDecl>(D);
 
-    // Remove only decls that have a name or registered in the lookup.
-    if (!ND->getDeclName() || ND->isHidden() || shouldBeHidden(ND)) return;
+    const bool cling = cling::isClient();
+    if (!cling) {
+      // Remove only decls that have a name
+      if (!ND->getDeclName()) return;
+    } else{
+      // Remove only decls that have a name or registered in the lookup.
+      if (!ND->getDeclName() || ND->isHidden() || shouldBeHidden(ND)) return;
+    }
 
-    auto *DC = D->getDeclContext();
+    auto *DC = !cling ? this : D->getDeclContext();
     do {
       StoredDeclsMap *Map = DC->getPrimaryContext()->LookupPtr;
       if (Map) {
         StoredDeclsMap::iterator Pos = Map->find(ND->getDeclName());
         if (Pos != Map->end()) {
-          StoredDeclsList::DeclsTy* Vec = Pos->second.getAsVector();
-          if ((Vec && std::find(Vec->begin(), Vec->end(), ND) != Vec->end())
-              || Pos->second.getAsDecl() == ND)
+          StoredDeclsList::DeclsTy *Vec = Pos->second.getAsVector();
+          if ((Vec && std::find(Vec->begin(), Vec->end(), ND) != Vec->end()) ||
+              Pos->second.getAsDecl() == ND)
             Pos->second.remove(ND);
         } else if (errs) {
           errs->push_back(DC);

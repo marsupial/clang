@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Lex/Lexer.h"
 #include "UnicodeCharSets.h"
 #include "clang/Basic/CharInfo.h"
@@ -776,8 +777,8 @@ SourceLocation Lexer::getLocForEndOfToken(SourceLocation Loc, unsigned Offset,
       return SourceLocation(); // Points inside the macro expansion.
   }
 
-  // Don't hit the file system for ASTReader tokens.
-  if (SM.isLoadedSourceLocation(Loc))
+  // CLING: Don't hit the file system for ASTReader tokens.
+  if (cling::isClient() && SM.isLoadedSourceLocation(Loc))
     return Loc;
 
   unsigned Len = Lexer::MeasureTokenLength(Loc, SM, LangOpts);
@@ -1543,7 +1544,8 @@ FinishIdentifier:
     if (II->isHandleIdentifierCase())
       return PP->HandleIdentifier(Result);
 
-    if (II->getTokenID() == tok::identifier && isCodeCompletionPoint(CurPtr)
+    if (cling::isClient()
+        && II->getTokenID() == tok::identifier && isCodeCompletionPoint(CurPtr)
         && II->getPPKeywordID() == tok::pp_not_keyword
         && II->getObjCKeywordID() == tok::objc_not_keyword) {
       // Return the code-completion token.

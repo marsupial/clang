@@ -17,6 +17,7 @@
 #ifndef LLVM_CLANG_AST_TYPE_H
 #define LLVM_CLANG_AST_TYPE_H
 
+#include "clang/Basic/cling.h"
 #include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/TemplateName.h"
 #include "clang/Basic/AddressSpaces.h"
@@ -4019,7 +4020,9 @@ public:
   /// Gets the type that was substituted for the template
   /// parameter.
   QualType getReplacementType() const {
-    return Replacement;
+    if (cling::isClient())
+      return Replacement;
+    return getCanonicalTypeInternal();
   }
 
   bool isSugared() const { return true; }

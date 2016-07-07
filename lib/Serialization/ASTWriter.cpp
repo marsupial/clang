@@ -4149,6 +4149,8 @@ void ASTWriter::AddToken(const Token &Tok, RecordDataImpl &Record) {
   Record.push_back(Tok.getKind());
   // FIXME: Should translate token flags to a stable encoding.
   Record.push_back(Tok.getFlags());
+  // FIXME: cling needs this to occur if cling::isClient or not for reading in
+  // later, but it seriously bloats a pch
   if (Tok.isLiteral())
      AddString(Tok.getLiteralData(), Record);
 }

@@ -30,8 +30,6 @@
 #include <memory>
 #include <stack>
 
-namespace cling { class ParserStateRAII; }
-
 namespace clang {
   class PragmaHandler;
   class Scope;

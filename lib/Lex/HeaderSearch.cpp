@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/IdentifierTable.h"
@@ -352,7 +353,7 @@ const FileEntry *DirectoryLookup::LookupFile(
     return HS.getFileAndSuggestModule(TmpDir, IncludeLoc, getDir(),
                                       isSystemHeaderDirectory(),
                                       RequestingModule, SuggestedModule,
-                                      OpenFile, true /*CacheFailures*/);
+                                      OpenFile, cling::isROOT() /*CacheFailures*/);
   }
 
   if (isFramework())
@@ -1029,7 +1030,7 @@ HeaderFileInfo &HeaderSearch::getFileInfo(const FileEntry *FE) {
   }
 
   // Is the file open even though its content comes from an external source?
-  if (HFI->External && FE->File)
+  if (HFI->External && FE->File && cling::isROOT())
     FE->closeFile();
 
   HFI->IsValid = true;
@@ -1055,7 +1056,7 @@ HeaderSearch::getExistingFileInfo(const FileEntry *FE,
     HFI = &FileInfo[FE->getUID()];
 
     // Is the file open even though its content comes from an external source?
-    if (HFI->External && FE->File)
+    if (HFI->External && FE->File && cling::isROOT())
        FE->closeFile();
 
     if (!WantExternal && (!HFI->IsValid || HFI->External))
@@ -1617,6 +1618,9 @@ void HeaderSearch::AddSearchPath(const DirectoryLookup &dir, bool isAngled) {
   if (!isAngled)
     AngledDirIdx++;
   SystemDirIdx++;
+
+  if (!cling::isClient())
+    return;
 
   const size_t CurSize = SearchDirs.size();
   for (auto& Entry : LookupFileCache) {

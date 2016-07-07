@@ -36,10 +36,6 @@
 #include "llvm/Support/Compiler.h"
 #include <cstdarg>
 
-#ifdef CLING_OBJC_SUPPORT
-  #include "clang/CodeGen/IObjCLookup.h"
-#endif
-
 using namespace clang;
 using namespace CodeGen;
 
