@@ -1644,7 +1644,7 @@ public:
   void addHiddenDecl(Decl *D);
 
   /// @brief Removes a declaration from this context.
-  void removeDecl(Decl *D);
+  void removeDecl(Decl *D, llvm::SmallVectorImpl<DeclContext*>* = nullptr);
     
   /// @brief Checks whether a declaration is in this context.
   bool containsDecl(Decl *D) const;
