@@ -10,6 +10,7 @@
 //  This file implements the CodeCompleteConsumer class.
 //
 //===----------------------------------------------------------------------===//
+#include "clang/Basic/cling.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang-c/Index.h"
 #include "clang/AST/DeclCXX.h"
@@ -456,7 +457,9 @@ PrintingCodeCompleteConsumer::ProcessCodeCompleteResults(Sema &SemaRef,
                                                          unsigned NumResults) {
   std::stable_sort(Results, Results + NumResults);
   
-  StringRef Filter = SemaRef.getPreprocessor().getCodeCompletionFilter();
+  StringRef Filter;
+  if (cling::isClient())
+    Filter = SemaRef.getPreprocessor().getCodeCompletionFilter();
 
   // Print the results.
   for (unsigned I = 0; I != NumResults; ++I) {

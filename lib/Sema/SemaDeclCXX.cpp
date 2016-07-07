@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Sema/SemaInternal.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -524,31 +525,31 @@ bool Sema::MergeCXXFunctionDecl(FunctionDecl *New, FunctionDecl *Old,
           Invalid = false;
         }
       }
-
-      (void)DiagDefaultParamID;
-#if 0 // Disable until Diag is rewired
-      // FIXME: If we knew where the '=' was, we could easily provide a fix-it 
-      // hint here. Alternatively, we could walk the type-source information
-      // for NewParam to find the last source location in the type... but it
-      // isn't worth the effort right now. This is the kind of test case that
-      // is hard to get right:
-      //   int f(int);
-      //   void g(int (*fp)(int) = f);
-      //   void g(int (*fp)(int) = &f);
-      Diag(NewParam->getLocation(), DiagDefaultParamID)
-        << NewParam->getDefaultArgRange();
       
-      // Look for the function declaration where the default argument was
-      // actually written, which may be a declaration prior to Old.
-      for (auto Older = PrevForDefaultArgs;
-           OldParam->hasInheritedDefaultArg(); /**/) {
-        Older = Older->getPreviousDecl();
-        OldParam = Older->getParamDecl(p);
-      }
+      // CLING: Disable until Diag is rewired
+      if (!cling::isROOT()) {
+        // FIXME: If we knew where the '=' was, we could easily provide a fix-it
+        // hint here. Alternatively, we could walk the type-source information
+        // for NewParam to find the last source location in the type... but it
+        // isn't worth the effort right now. This is the kind of test case that
+        // is hard to get right:
+        //   int f(int);
+        //   void g(int (*fp)(int) = f);
+        //   void g(int (*fp)(int) = &f);
+        Diag(NewParam->getLocation(), DiagDefaultParamID)
+          << NewParam->getDefaultArgRange();
+        
+        // Look for the function declaration where the default argument was
+        // actually written, which may be a declaration prior to Old.
+        for (auto Older = PrevForDefaultArgs;
+             OldParam->hasInheritedDefaultArg(); /**/) {
+          Older = Older->getPreviousDecl();
+          OldParam = Older->getParamDecl(p);
+        }
 
-      Diag(OldParam->getLocation(), diag::note_previous_definition)
-        << OldParam->getDefaultArgRange();
-#endif
+        Diag(OldParam->getLocation(), diag::note_previous_definition)
+          << OldParam->getDefaultArgRange();
+      }
     } else if (OldParamHasDfl) {
       // Merge the old default argument into the new parameter.
       // It's important to use getInit() here;  getDefaultArg()

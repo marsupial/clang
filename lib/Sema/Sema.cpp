@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Sema/SemaInternal.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
@@ -74,7 +75,8 @@ void Sema::ActOnTranslationUnitScope(Scope *S) {
 Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
            TranslationUnitKind TUKind,
            CodeCompleteConsumer *CodeCompleter)
-  : ExternalSource(nullptr), FPFeatures(pp.getLangOpts()),
+  : ExternalSource(nullptr),
+    isMultiplexExternalSource(false), FPFeatures(pp.getLangOpts()),
     LangOpts(pp.getLangOpts()), PP(pp), Context(ctxt), Consumer(consumer),
     Diags(PP.getDiagnostics()), SourceMgr(PP.getSourceManager()),
     CollectStats(false), CodeCompleter(CodeCompleter),
@@ -276,6 +278,10 @@ Sema::~Sema() {
         = dyn_cast_or_null<ExternalSemaSource>(Context.getExternalSource()))
     ExternalSema->ForgetSema();
 
+  // If Sema's ExternalSource is the multiplexer - we own it.
+  if (isMultiplexExternalSource && !cling::isClient())
+    delete ExternalSource;
+
   threadSafety::threadSafetyCleanup(ThreadSafetyDeclCache);
 
   // Destroys data sharing attributes stack for OpenMP
@@ -326,12 +332,21 @@ void Sema::addExternalSource(ExternalSemaSource *E) {
     return;
   }
 
-  if (MultiplexExternalSource.get())
-    MultiplexExternalSource->addSource(*E);
-  else {
-    MultiplexExternalSource
-      = new MultiplexExternalSemaSource(*ExternalSource, *E);
-    ExternalSource = MultiplexExternalSource.get();
+  if (!cling::isClient()) {
+    if (isMultiplexExternalSource)
+      static_cast<MultiplexExternalSemaSource*>(ExternalSource)->addSource(*E);
+    else {
+      ExternalSource = new MultiplexExternalSemaSource(*ExternalSource, *E);
+      isMultiplexExternalSource = true;
+    }
+  } else {
+    if (MultiplexExternalSource.get())
+      MultiplexExternalSource->addSource(*E);
+    else {
+      MultiplexExternalSource
+        = new MultiplexExternalSemaSource(*ExternalSource, *E);
+      ExternalSource = MultiplexExternalSource.get();
+    }
   }
 }
 
@@ -706,7 +721,7 @@ void Sema::ActOnEndOfTranslationUnit() {
 
   if (TUKind == TU_Prefix) {
     // Translation unit prefixes don't need any of the checking below.
-    if (!PP.isIncrementalProcessingEnabled())
+    if (!PP.isIncrementalProcessingEnabled() || !cling::isClient())
       TUScope = nullptr;
     return;
   }
@@ -906,7 +921,7 @@ void Sema::ActOnEndOfTranslationUnit() {
   assert(ParsingInitForAutoVars.empty() &&
          "Didn't unmark var as having its initializer parsed");
 
-  if (!PP.isIncrementalProcessingEnabled())
+  if (!PP.isIncrementalProcessingEnabled() || !cling::isClient())
     TUScope = nullptr;
 }
 

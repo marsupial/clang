@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTMutationListener.h"
@@ -1787,7 +1788,7 @@ bool Sema::LookupName(LookupResult &R, Scope *S, bool AllowBuiltinCreation) {
   } else {
     // Perform C++ unqualified name lookup.
     if (CppLookupName(R, S)) {
-      if (R.isSingleResult())
+      if (cling::isClient() && R.isSingleResult())
         if (const TagDecl *TD = dyn_cast<TagDecl>(R.getFoundDecl())) {
           if (!TD->getDefinition() && ExternalSource)
             ExternalSource->LookupUnqualified(R, S);

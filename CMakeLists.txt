@@ -516,6 +516,11 @@ if(CLANG_ENABLE_COMPILER)
   add_definitions(-DCLANG_ENABLE_COMPILER)
 endif()
 
+option(CLING_CLANG_RUNTIME_PATCH "Cling runtime patching of clang." OFF)
+if(CLING_CLANG_RUNTIME_PATCH)
+  message(STATUS "Clang library with cling patching at runtime")
+  add_definitions(-DCLING_CLANG_RUNTIME_PATCH)
+endif()
 
 # Clang version information
 set(CLANG_EXECUTABLE_VERSION

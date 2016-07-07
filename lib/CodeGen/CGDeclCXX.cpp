@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "CodeGenFunction.h"
 #include "CGCXXABI.h"
 #include "CGObjCRuntime.h"
@@ -339,19 +340,24 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     getCXXABI().getMangleContext().mangleDynamicInitializer(D, Out);
   }
 
-  // Use the module name to make the initializer unique accross modules.
-  SmallString<128> moduleName(TheModule.getName());
-  for (size_t i = 0; i < moduleName.size(); ++i) {
-    // Replace everything that's not [a-zA-Z0-9._] with a _. This set happens
-    // to be the set of C preprocessing numbers.
-    if (!isPreprocessingNumberBody(moduleName[i]))
-      moduleName[i] = '_';
+  const bool cling = cling::isClient();
+  // CLING: Use the module name to make the initializer unique accross modules.
+  SmallString<128> moduleName;
+  if (cling) {
+    moduleName = TheModule.getName();
+    for (size_t i = 0; i < moduleName.size(); ++i) {
+      // Replace everything that's not [a-zA-Z0-9._] with a _. This set happens
+      // to be the set of C preprocessing numbers.
+      if (!isPreprocessingNumberBody(moduleName[i]))
+        moduleName[i] = '_';
+    }
+    moduleName.append("_");
   }
 
   // Create a variable initialization function.
   llvm::Function *Fn =
-      CreateGlobalInitOrDestructFunction(FTy,
-                                         llvm::Twine(FnName)+moduleName.str()+"_",
+      CreateGlobalInitOrDestructFunction(FTy, !cling ? FnName.str() :
+                                         llvm::Twine(FnName)+moduleName.str(),
                                          getTypes().arrangeNullaryFunction(),
                                          D->getLocation());
 

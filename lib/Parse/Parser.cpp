@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Parse/Parser.h"
 #include "RAIIObjectsForParser.h"
 #include "clang/AST/ASTConsumer.h"
@@ -567,8 +568,9 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
                                     PP.isIncrementalProcessingEnabled() ?
                                     LateTemplateParserCleanupCallback : nullptr,
                                     this);
-    Actions.ActOnEndOfTranslationUnit();
-
+    if (cling::isClient() || !PP.isIncrementalProcessingEnabled())
+      Actions.ActOnEndOfTranslationUnit();
+    //else don't tell Sema that we ended parsing: more input might come.
     return true;
 
   default:

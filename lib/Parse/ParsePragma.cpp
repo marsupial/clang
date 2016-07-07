@@ -164,7 +164,7 @@ struct PragmaMSRuntimeChecksHandler : public EmptyPragmaHandler {
 }  // end namespace
 
 void Parser::initializePragmaHandlers() {
-  // No pragma parsing for temporary parsers.
+  // CLING: No pragma parsing for temporary parsers.
   if (IsTemporary)
      return;
 
@@ -249,7 +249,7 @@ void Parser::initializePragmaHandlers() {
 }
 
 void Parser::resetPragmaHandlers() {
-  // No pragma parsing for temporary parsers.
+  // CLING: No pragma parsing for temporary parsers.
   if (IsTemporary)
      return;
 
