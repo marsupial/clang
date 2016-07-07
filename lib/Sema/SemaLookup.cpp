@@ -1792,11 +1792,11 @@ bool Sema::LookupName(LookupResult &R, Scope *S, bool AllowBuiltinCreation) {
   } else {
     // Perform C++ unqualified name lookup.
     if (CppLookupName(R, S)) {
-      if (cling::isClient() && R.isSingleResult())
-        if (const TagDecl *TD = dyn_cast<TagDecl>(R.getFoundDecl())) {
-          if (!TD->getDefinition() && ExternalSource)
+      if (ExternalSource && R.isSingleResult() && cling::isClient()) {
+        if (const TagDecl *TD = dyn_cast<TagDecl>(R.getFoundDecl()))
+          if (!TD->getDefinition())
             ExternalSource->LookupUnqualified(R, S);
-        }
+      }
       return true;
     }
   }

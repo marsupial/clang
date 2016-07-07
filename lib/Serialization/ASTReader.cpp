@@ -2081,7 +2081,7 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
   BitstreamCursor &Cursor = F.InputFilesCursor;
   SavedStreamPosition SavedPosition(Cursor);
   Cursor.JumpToBit(F.InputFileOffsets[ID-1]);
-
+  
   InputFileInfo FI = readInputFileInfo(F, ID);
   off_t StoredSize = FI.StoredSize;
   time_t StoredTime = FI.StoredTime;
