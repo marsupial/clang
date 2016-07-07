@@ -125,6 +125,10 @@ def warn_duplicate_module_file_extension : Warning<
   "duplicate module file extension block name '%0'">,
   InGroup<ModuleFileExtension>;
 
+def warn_pch_rebuild_required : Warning<
+  "please rebuild precompiled header '%0' with %1">,
+  InGroup<DiagGroup<"invalid-pch">>;
+
 } // let CategoryName
 } // let Component
 
