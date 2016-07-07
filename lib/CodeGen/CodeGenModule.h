@@ -340,7 +340,7 @@ private:
   void addDeferredDeclToEmit(llvm::GlobalValue *GV, GlobalDecl GD,
                              StringRef MangledName) {
     DeferredDeclsToEmit.emplace_back(GV, GD);
-    addEmittedDeferredDecl(GD, MangledName);
+    if (cling::isClient()) addEmittedDeferredDecl(GD, MangledName);
   }
 
   /// List of alias we have emitted. Used to make sure that what they point to

@@ -25,6 +25,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemStatCache.h"
@@ -781,7 +782,7 @@ void Preprocessor::Lex(Token &Result) {
     }
   } while (!ReturnedToken);
 
-  if (Result.is(tok::code_completion))
+  if (cling::isClient() && Result.is(tok::code_completion))
       setCodeCompletionIdentifierInfo(Result.getIdentifierInfo());
 
   LastTokenWasAt = Result.is(tok::at);
