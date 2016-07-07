@@ -1473,18 +1473,17 @@ StringRef SourceManager::getBufferName(SourceLocation Loc,
                                        bool *Invalid) const {
   if (isInvalid(Loc, Invalid)) return "<invalid loc>";
 
-  if (!cling::isROOT())
-    return getBuffer(getFileID(Loc), Invalid)->getBufferIdentifier();
-
-  // Try to get the name without reading the buffer.
-  FileID FID = getFileID(Loc);
-  const SrcMgr::SLocEntry &Entry = getSLocEntry(FID, Invalid);
-  if (!Invalid && Entry.isFile()) {
-    if (const FileEntry* FE = Entry.getFile().getContentCache()->ContentsEntry)
-      return FE->getName();
+  if (cling::isROOT()) {
+    const FileID FID = getFileID(Loc);
+    // Try to get the name without reading the buffer.
+    const SrcMgr::SLocEntry &Entry = getSLocEntry(FID, Invalid);
+    if (!Invalid && Entry.isFile()) {
+      if (const FileEntry* FE = Entry.getFile().getContentCache()->ContentsEntry)
+        return FE->getName();
+    }
+    return getBuffer(FID, Invalid)->getBufferIdentifier();
   }
-
-  return getBuffer(FID, Invalid)->getBufferIdentifier();
+  return getBuffer(getFileID(Loc), Invalid)->getBufferIdentifier();
 }
 
 
@@ -2166,12 +2165,12 @@ bool SourceManager::isBeforeInTranslationUnit(SourceLocation LHS,
       return LIsScratch;
     return LOffs.second < ROffs.second;
   }
-  if (!cling::isROOT())
-    llvm_unreachable("Unsortable locations found");
-
-  //CLING: Work around diags from include chains not rooted in main file.
-  assert(0 && "Unsortable locations found");
-  return LOffs.first < ROffs.first;
+  if (cling::isROOT()) {
+    //CLING: Work around diags from include chains not rooted in main file.
+    assert(0 && "Unsortable locations found");
+    return LOffs.first < ROffs.first;
+  }
+  llvm_unreachable("Unsortable locations found");
 }
 
 void SourceManager::PrintStats() const {

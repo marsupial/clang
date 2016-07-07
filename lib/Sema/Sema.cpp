@@ -353,14 +353,7 @@ void Sema::addExternalSource(ExternalSemaSource *E) {
     return;
   }
 
-  if (!cling::isClient()) {
-    if (isMultiplexExternalSource)
-      static_cast<MultiplexExternalSemaSource*>(ExternalSource)->addSource(*E);
-    else {
-      ExternalSource = new MultiplexExternalSemaSource(*ExternalSource, *E);
-      isMultiplexExternalSource = true;
-    }
-  } else {
+  if (cling::isClient()) {
     if (MultiplexExternalSource.get())
       MultiplexExternalSource->addSource(*E);
     else {
@@ -368,6 +361,14 @@ void Sema::addExternalSource(ExternalSemaSource *E) {
         = new MultiplexExternalSemaSource(*ExternalSource, *E);
       ExternalSource = MultiplexExternalSource.get();
     }
+    return;
+  }
+
+  if (isMultiplexExternalSource)
+    static_cast<MultiplexExternalSemaSource*>(ExternalSource)->addSource(*E);
+  else {
+    ExternalSource = new MultiplexExternalSemaSource(*ExternalSource, *E);
+    isMultiplexExternalSource = true;
   }
 }
 
