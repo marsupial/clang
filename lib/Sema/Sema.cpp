@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
 #include "clang/AST/DeclCXX.h"
@@ -72,7 +73,7 @@ void Sema::ActOnTranslationUnitScope(Scope *S) {
 
 Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
            TranslationUnitKind TUKind, CodeCompleteConsumer *CodeCompleter)
-    : ExternalSource(nullptr),
+    : ExternalSource(nullptr), isMultiplexExternalSource(false),
       FPFeatures(pp.getLangOpts()), LangOpts(pp.getLangOpts()), PP(pp),
       Context(ctxt), Consumer(consumer), Diags(PP.getDiagnostics()),
       SourceMgr(PP.getSourceManager()), CollectStats(false),
@@ -298,6 +299,10 @@ Sema::~Sema() {
         = dyn_cast_or_null<ExternalSemaSource>(Context.getExternalSource()))
     ExternalSema->ForgetSema();
 
+  // If Sema's ExternalSource is the multiplexer - we own it.
+  if (isMultiplexExternalSource && !cling::isClient())
+    delete ExternalSource;
+
   threadSafety::threadSafetyCleanup(ThreadSafetyDeclCache);
 
   // Destroys data sharing attributes stack for OpenMP
@@ -348,12 +353,21 @@ void Sema::addExternalSource(ExternalSemaSource *E) {
     return;
   }
 
-  if (MultiplexExternalSource.get())
-    MultiplexExternalSource->addSource(*E);
-  else {
-    MultiplexExternalSource
-      = new MultiplexExternalSemaSource(*ExternalSource, *E);
-    ExternalSource = MultiplexExternalSource.get();
+  if (!cling::isClient()) {
+    if (isMultiplexExternalSource)
+      static_cast<MultiplexExternalSemaSource*>(ExternalSource)->addSource(*E);
+    else {
+      ExternalSource = new MultiplexExternalSemaSource(*ExternalSource, *E);
+      isMultiplexExternalSource = true;
+    }
+  } else {
+    if (MultiplexExternalSource.get())
+      MultiplexExternalSource->addSource(*E);
+    else {
+      MultiplexExternalSource
+        = new MultiplexExternalSemaSource(*ExternalSource, *E);
+      ExternalSource = MultiplexExternalSource.get();
+    }
   }
 }
 

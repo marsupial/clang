@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "TypeLocBuilder.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclTemplate.h"
@@ -23,8 +24,6 @@
 #include "clang/Sema/Template.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace clang;
-
-#include "HackForDefaultTemplateArg.h"
 
 /// \brief Find the current instantiation that associated with the given type.
 static CXXRecordDecl *getCurrentInstantiationOf(QualType T,
@@ -157,8 +156,7 @@ DeclContext *Sema::computeDeclContext(const CXXScopeSpec &SS,
   case NestedNameSpecifier::TypeSpec:
   case NestedNameSpecifier::TypeSpecWithTemplate: {
     const TagType *Tag = NNS->getAsType()->getAs<TagType>();
-    if (!Tag 
-	&& sema::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+    if (!Tag && cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
       // In case we are in the middle of a template name creation
       // that tries to keep some of the typedef
       Tag = NNS->getAsType()->getCanonicalTypeInternal()->getAs<TagType>();
@@ -532,7 +530,11 @@ bool Sema::BuildCXXNestedNameSpecifier(Scope *S, NestedNameSpecInfo &IdInfo,
     // nested-name-specifier.
 
     // The declaration context must be complete.
-    if (!LookupCtx->isDependentContext()) {
+    if (!cling::isROOT()) {
+      if (!LookupCtx->isDependentContext() &&
+          RequireCompleteDeclContext(SS, LookupCtx))
+        return true;
+    } else if (!LookupCtx->isDependentContext()) {
       if (RequireCompleteDeclContext(SS, LookupCtx)) {
         return true;
       } else if (TagDecl* TD = dyn_cast<TagDecl>(LookupCtx)) {
@@ -540,7 +542,6 @@ bool Sema::BuildCXXNestedNameSpecifier(Scope *S, NestedNameSpecInfo &IdInfo,
         LookupCtx = TD->getDefinition();
       }
     }
-
 
     LookupQualifiedName(Found, LookupCtx);
 

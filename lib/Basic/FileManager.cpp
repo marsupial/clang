@@ -17,6 +17,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemStatCache.h"
 #include "clang/Basic/SourceManager.h"
@@ -221,15 +222,17 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
   auto &NamedFileEnt =
       *SeenFileEntries.insert(std::make_pair(Filename, nullptr)).first;
 
-  const FileEntry *StaleFileEntry = 0;
+  const FileEntry *StaleFileEntry = nullptr;
   bool needsRereading = false;
-  if (NamedFileEnt.getValue() && NamedFileEnt.getValue() != NON_EXISTENT_FILE) {
-    std::set<const FileEntry*>::const_iterator found
-      = FileEntriesToReread.find(NamedFileEnt.getValue());
-    if (found != FileEntriesToReread.end()) {
-      needsRereading = true;
-      StaleFileEntry = NamedFileEnt.getValue();
-      FileEntriesToReread.erase(found);
+  if (cling::isClient()) {
+    if (NamedFileEnt.getValue() && NamedFileEnt.getValue() != NON_EXISTENT_FILE) {
+      std::set<const FileEntry*>::const_iterator found
+        = FileEntriesToReread.find(NamedFileEnt.getValue());
+      if (found != FileEntriesToReread.end()) {
+        needsRereading = true;
+        StaleFileEntry = NamedFileEnt.getValue();
+        FileEntriesToReread.erase(found);
+      }
     }
   }
 
@@ -307,7 +310,7 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
     if (DirInfo != UFE.Dir && Data.IsVFSMapped)
       UFE.Dir = DirInfo;
   }
-  if (UFE.isValid() && Data.ModTime == UFE.ModTime) {
+  if (UFE.isValid() && (Data.ModTime == UFE.ModTime || !cling::isClient())) {
 
     // Always update the name to use the last name by which a file was accessed.
     // FIXME: Neither this nor always using the first name is correct; we want
@@ -516,30 +519,39 @@ bool FileManager::getNoncachedStatValue(StringRef Path,
 
 void FileManager::invalidateCache(FileEntry *Entry, SourceManager *SM) {
   assert(Entry && "Cannot invalidate a NULL FileEntry");
-  assert(Entry != NON_EXISTENT_FILE && "Cannot invalidate a missing FileEntry");
-  FileEntriesToReread.insert(Entry);
-  Entry->IsValid = false;
+  if (!cling::isClient()) {
+    SeenFileEntries.erase(Entry->getName());
 
-  // See if the entry exists as an absolute path as well
-  // When the Interpreter loads a file, it does so with an absolute path.
-  // So there may be two entries in the cache refering to the same file.
-  // TODO: Handle all the Entries that resolve to AbsPath
-  SmallString<512> AbsPath(Entry->getName());
-  if (makeAbsolutePath(AbsPath)) {
-    auto NamedFileEntItr = SeenFileEntries.find(AbsPath);
-    if (NamedFileEntItr != SeenFileEntries.end() ) {
-      FileEntry *AbsEntry = NamedFileEntItr->second;
-      assert(AbsEntry != Entry && "invalidateCache same path!");
-      if (AbsEntry != NON_EXISTENT_FILE) {
-        if (SM) {
-          FileID FID = SM->translateFile(AbsEntry);
-          if (FID.isValid())
-            SM->invalidateCache(FID, false);
-        }
-        FileEntriesToReread.insert(AbsEntry);
-        AbsEntry->IsValid = false;
-      } else
-        SeenFileEntries.erase(AbsPath);
+    // FileEntry invalidation should not block future optimizations in the file
+    // caches. Possible alternatives are cache truncation (invalidate last N) or
+    // invalidation of the whole cache.
+    UniqueRealFiles.erase(Entry->getUniqueID());
+  } else {
+    assert(Entry != NON_EXISTENT_FILE && "Cannot invalidate a missing FileEntry");
+    FileEntriesToReread.insert(Entry);
+    Entry->IsValid = false;
+
+    // See if the entry exists as an absolute path as well
+    // When the Interpreter loads a file, it does so with an absolute path.
+    // So there may be two entries in the cache refering to the same file.
+    // TODO: Handle all the Entries that resolve to AbsPath
+    SmallString<512> AbsPath(Entry->getName());
+    if (makeAbsolutePath(AbsPath)) {
+      auto NamedFileEntItr = SeenFileEntries.find(AbsPath);
+      if (NamedFileEntItr != SeenFileEntries.end() ) {
+        FileEntry *AbsEntry = NamedFileEntItr->second;
+        assert(AbsEntry != Entry && "invalidateCache same path!");
+        if (AbsEntry != NON_EXISTENT_FILE) {
+          if (SM) {
+            FileID FID = SM->translateFile(AbsEntry);
+            if (FID.isValid())
+              SM->invalidateCache(FID, false);
+          }
+          FileEntriesToReread.insert(AbsEntry);
+          AbsEntry->IsValid = false;
+        } else
+          SeenFileEntries.erase(AbsPath);
+      }
     }
   }
 }

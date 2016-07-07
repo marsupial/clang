@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Serialization/ASTReader.h"
 #include "ASTCommon.h"
 #include "ASTReaderInternals.h"
@@ -1408,7 +1409,7 @@ bool ASTReader::ReadSLocEntry(int ID) {
     // We will detect whether a file changed and return 'Failure' for it, but
     // we will also try to fail gracefully by setting up the SLocEntry.
     unsigned InputID = Record[4];
-    InputFile IF = getInputFile(*F, InputID, /*Complain=*/false);
+    InputFile IF = getInputFile(*F, InputID, /*Complain=*/!cling::isClient());
     const FileEntry *File = IF.getFile();
     bool OverriddenBuffer = IF.isOverridden();
 
@@ -1553,6 +1554,9 @@ Token ASTReader::ReadToken(ModuleFile &F, const RecordDataImpl &Record,
     Tok.setIdentifierInfo(II);
   Tok.setKind((tok::TokenKind)Record[Idx++]);
   Tok.setFlag((Token::TokenFlags)Record[Idx++]);
+  // FIXME: cling writes out string literals, but theres a chance the PCH
+  // came from a pure version of clang, in which case we shouldn't try to pull
+  // out data thats not there Tok.isLiteral() && RD.size() == Idx
   if (Tok.isLiteral()) {
     Tok.setLiteralData(
         TokenLiteralDataLoaded
@@ -1706,7 +1710,7 @@ bool HeaderFileInfoTrait::EqualKey(internal_key_ref a, internal_key_ref b) {
   if (llvm::sys::path::is_absolute(a.Filename) && a.Filename == b.Filename)
     return true;
 
-  if (StringRef(b.Filename).endswith(a.Filename))
+  if (cling::isROOT() && StringRef(b.Filename).endswith(a.Filename))
     return true;
   
   // Determine whether the actual files are equivalent.
@@ -2125,7 +2129,7 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
                                                             CurrentDir);
     if (!Resolved.empty())
       File = FileMgr.getFile(Resolved);
-    if (!File) {
+    if (!File && cling::isROOT()) {
       StringRef PPResolved = resolveFileThroughHeaderSearch(PP, Filename,
                                                             HSStemMap);
       if (!PPResolved.empty())
@@ -2213,12 +2217,14 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
         Diag(diag::note_pch_rebuild_required) << TopLevelPCHName;
     }
 
-    //IsOutOfDate = true;
-    // Force the match of the file from the live filesystem to the
-    // file in teh PCH. Size and time are used as part of the key;
-    // they must agree on both sides.
-    FileMgr.modifyFileEntry(const_cast<FileEntry*>(File),
-                            StoredSize, StoredTime);
+    if (cling::isROOT()) {
+      // CLING: Force the match of the file from the live filesystem to the
+      // file in teh PCH. Size and time are used as part of the key;
+      // they must agree on both sides.
+      FileMgr.modifyFileEntry(const_cast<FileEntry*>(File),
+                              StoredSize, StoredTime);
+    } else
+      IsOutOfDate = true;
   }
   // FIXME: If the file is overridden and we've already opened it,
   // issue an error (or split it into a separate FileEntry).
@@ -2302,8 +2308,8 @@ ASTReader::ASTReadResult ASTReader::ReadOptionsBlock(
 
     case TARGET_OPTIONS: {
       // Work around ROOT-6966
-      //bool Complain = (ClientLoadCapabilities & ARR_ConfigurationMismatch) == 0;
-      bool Complain = false;
+      bool Complain = cling::isROOT() ? false :
+                      (ClientLoadCapabilities & ARR_ConfigurationMismatch) == 0;
       if (ParseTargetOptions(Record, Complain, Listener,
                              AllowCompatibleConfigurationMismatch))
         Result = ConfigurationMismatch;
@@ -2388,12 +2394,15 @@ ASTReader::ReadControlBlock(ModuleFile &F,
       const HeaderSearchOptions &HSOpts =
           PP.getHeaderSearchInfo().getHeaderSearchOpts();
 
+      const bool ROOT = cling::isROOT();
       // All user input files reside at the index range [0, NumUserInputs), and
       // system input files reside at [NumUserInputs, NumInputs). For explicitly
       // loaded module files, ignore missing inputs.
-        bool Validate = !DisableValidation && F.Kind != MK_ExplicitModule && F.Kind != MK_PrebuiltModule;
+      const bool Validate = !DisableValidation && F.Kind != MK_ExplicitModule && F.Kind != MK_PrebuiltModule;
+      if (ROOT || Validate) {
         bool Complain = (ClientLoadCapabilities & ARR_OutOfDate) == 0;
-        Complain &= Validate;
+        if (ROOT)
+          Complain &= Validate;
 
         // If we are reading a module, we will create a verification timestamp,
         // so we verify all input files.  Otherwise, verify only user input
@@ -2406,13 +2415,22 @@ ASTReader::ReadControlBlock(ModuleFile &F,
              F.Kind == MK_ImplicitModule))
           N = NumInputs;
 
-        for (unsigned I = 0; I < NumInputs; ++I) {
-          if (I == N)
-            Complain = false;
-          InputFile IF = getInputFile(F, I+1, Complain);
-          if (Validate && (!IF.getFile() || IF.isOutOfDate()))
-            return OutOfDate;
+        if (!ROOT) {
+          for (unsigned I = 0; I < N; ++I) {
+            InputFile IF = getInputFile(F, I+1, Complain);
+            if (!IF.getFile() || IF.isOutOfDate())
+              return OutOfDate;
+          }
+        } else {
+          for (unsigned I = 0; I < NumInputs; ++I) {
+            if (I == N)
+              Complain = false;
+            InputFile IF = getInputFile(F, I+1, Complain);
+            if (Validate && (!IF.getFile() || IF.isOutOfDate()))
+              return OutOfDate;
+          }
         }
+      }
 
       if (Listener)
         Listener->visitModuleFile(F.FileName, F.Kind);

@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/AST/Type.h"
+#include "clang/Basic/cling.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/CharUnits.h"
@@ -2795,7 +2795,8 @@ FunctionProtoType::getNoexceptSpec(const ASTContext &ctx) const {
 
 CanThrowResult FunctionProtoType::canThrow(const ASTContext &Ctx) const {
   ExceptionSpecificationType EST = getExceptionSpecType();
-  //AXEL: assert(EST != EST_Unevaluated && EST != EST_Uninstantiated);
+  if (!cling::isROOT())
+    assert(EST != EST_Unevaluated && EST != EST_Uninstantiated);
   if (EST == EST_DynamicNone || EST == EST_BasicNoexcept)
     return CT_Cannot;
 

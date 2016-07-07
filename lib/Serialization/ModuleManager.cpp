@@ -11,6 +11,7 @@
 //  modules for the ASTReader.
 //
 //===----------------------------------------------------------------------===//
+#include "clang/Basic/cling.h"
 #include "clang/Serialization/ModuleManager.h"
 #include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Frontend/PCHContainerOperations.h"
@@ -233,7 +234,9 @@ void ModuleManager::removeModules(
   for (ModuleIterator victim = First; victim != Last; ++victim) {
     Modules.erase(victim->File);
 
-    FileMgr.invalidateCache(const_cast<FileEntry*>(victim->File));
+    if (cling::isClient())
+      FileMgr.invalidateCache(const_cast<FileEntry*>(victim->File));
+
     if (modMap) {
       StringRef ModuleName = victim->ModuleName;
       if (Module *mod = modMap->findModule(ModuleName)) {

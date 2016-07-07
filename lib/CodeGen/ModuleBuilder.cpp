@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/CodeGen/ModuleBuilder.h"
 #include "CGDebugInfo.h"
 #include "CodeGenModule.h"
@@ -97,11 +98,13 @@ namespace clang {
     }
 
     llvm::Module *ReleaseModule() {
-      // Remove pending etc decls in case of error; the asserts in StartModule()
-      // will rightfully be confused otherwise, as none of the decls were
-      // emitted.
-      if (Diags.hasErrorOccurred())
-        Builder->clear();
+      if (cling::isClient()) {
+        // Remove pending etc decls in case of error; the asserts in StartModule()
+        // will rightfully be confused otherwise, as none of the decls were
+        // emitted.
+        if (Diags.hasErrorOccurred())
+          Builder->clear();
+      }
       return M.release();
     }
 
@@ -128,6 +131,7 @@ namespace clang {
                               llvm::LLVMContext& C,
                               const CodeGenOptions& CGO) {
       assert(!M && "Replacing existing Module?");
+      assert(cling::isClient() && "cling is not client");
 
       std::unique_ptr<CodeGen::CodeGenModule> OldBuilder;
       OldBuilder.swap(Builder);
@@ -276,6 +280,7 @@ namespace clang {
     }
 
     void forgetGlobal(llvm::GlobalValue* GV) {
+      assert(cling::isClient() && "CodeGenerator::forgetGlobal called");
       for (auto I = Builder->ConstantStringMap.begin(),
             E = Builder->ConstantStringMap.end(); I != E; ++I) {
         if (I->second == GV) {
@@ -286,6 +291,7 @@ namespace clang {
     }
 
     void forgetDecl(const GlobalDecl& GD, llvm::StringRef MangledName) {
+      assert(cling::isClient() && "CodeGenerator::forgetDecl called");
       Builder->DeferredDecls.erase(MangledName);
     }
 

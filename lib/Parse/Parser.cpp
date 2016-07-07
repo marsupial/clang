@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "clang/Parse/Parser.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -612,8 +613,9 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
                                     PP.isIncrementalProcessingEnabled() ?
                                     LateTemplateParserCleanupCallback : nullptr,
                                     this);
-    Actions.ActOnEndOfTranslationUnit();
-
+    if (cling::isClient() || !PP.isIncrementalProcessingEnabled())
+      Actions.ActOnEndOfTranslationUnit();
+    //else don't tell Sema that we ended parsing: more input might come.
     return true;
 
   default:

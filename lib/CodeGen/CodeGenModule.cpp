@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "CodeGenModule.h"
 #include "CGBlocks.h"
 #include "CGCUDARuntime.h"
@@ -757,17 +758,19 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   ConstantInitBuilder builder(*this);
   auto ctors = builder.beginArray(CtorStructTy);
 
-  // Add existing ones:
-  if (llvm::GlobalVariable* OldGlobal
-      = TheModule.getGlobalVariable(GlobalName, true)) {
-    if (const llvm::ConstantArray* CArr =
-        llvm::dyn_cast<llvm::ConstantArray>(OldGlobal->getInitializer())) {
-      uint64_t OldSize = CArr->getType()->getNumElements();
-      for (uint64_t Idx = 0; Idx < OldSize; ++Idx) {
-        ctors.add(CArr->getAggregateElement(Idx));
+  if (cling::isClient()) {
+    // Add existing ones:
+    if (llvm::GlobalVariable* OldGlobal
+        = TheModule.getGlobalVariable(GlobalName, true)) {
+      if (const llvm::ConstantArray* CArr =
+          llvm::dyn_cast<llvm::ConstantArray>(OldGlobal->getInitializer())) {
+        uint64_t OldSize = CArr->getType()->getNumElements();
+        for (uint64_t Idx = 0; Idx < OldSize; ++Idx) {
+          ctors.add(CArr->getAggregateElement(Idx));
+        }
       }
+      OldGlobal->eraseFromParent();
     }
-    OldGlobal->eraseFromParent();
   }
 
   for (const auto &I : Fns) {
@@ -1195,9 +1198,11 @@ static void emitUsed(CodeGenModule &CGM, StringRef Name,
 
 void CodeGenModule::emitLLVMUsed() {
   emitUsed(*this, "llvm.used", LLVMUsed);
-  LLVMUsed.clear();
   emitUsed(*this, "llvm.compiler.used", LLVMCompilerUsed);
-  LLVMCompilerUsed.clear();
+  if (cling::isROOT()) {
+    LLVMUsed.clear();
+    LLVMCompilerUsed.clear();
+  }
 }
 
 void CodeGenModule::AppendLinkerOptions(StringRef Opts) {
@@ -1421,21 +1426,23 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
 
 llvm::Constant *CodeGenModule::EmitAnnotationUnit(SourceLocation Loc) {
   SourceManager &SM = getContext().getSourceManager();
-  //PresumedLoc PLoc = SM.getPresumedLoc(Loc);
-  //if (PLoc.isValid())
-  //  return EmitAnnotationString(PLoc.getFilename());
+  if (!cling::isROOT()) {
+    PresumedLoc PLoc = SM.getPresumedLoc(Loc);
+    if (PLoc.isValid())
+      return EmitAnnotationString(PLoc.getFilename());
+  }
   return EmitAnnotationString(SM.getBufferName(Loc));
 }
 
 llvm::Constant *CodeGenModule::EmitAnnotationLineNo(SourceLocation L) {
-  return llvm::ConstantInt::get(Int32Ty, 1);
-#if 0
+  if (cling::isROOT())
+    return llvm::ConstantInt::get(Int32Ty, 1);
+
   SourceManager &SM = getContext().getSourceManager();
   PresumedLoc PLoc = SM.getPresumedLoc(L);
   unsigned LineNo = PLoc.isValid() ? PLoc.getLine() :
     SM.getExpansionLineNumber(L);
   return llvm::ConstantInt::get(Int32Ty, LineNo);
-#endif
 }
 
 llvm::Constant *CodeGenModule::EmitAnnotateAttr(llvm::GlobalValue *GV,
@@ -4232,7 +4239,7 @@ void CodeGenFunction::EmitDeclMetadata() {
 void CodeGenModule::EmitVersionIdentMetadata() {
   llvm::NamedMDNode *IdentMetadata =
     TheModule.getOrInsertNamedMetadata("llvm.ident");
-  if (IdentMetadata->getNumOperands() > 0)
+  if (IdentMetadata->getNumOperands() > 0 && cling::isClient())
     return;
 
   std::string Version = getClangFullVersion();

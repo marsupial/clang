@@ -9,6 +9,7 @@
 //  This file implements semantic analysis for C++ templates.
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/cling.h"
 #include "TreeTransform.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
@@ -37,29 +38,31 @@
 using namespace clang;
 using namespace sema;
 
-bool HackForDefaultTemplateArg::AllowNonCanonicalSubstEnabled = true;
+namespace cling {
+  bool HackForDefaultTemplateArg::AllowNonCanonicalSubstEnabled = true;
 
-// Default constructor, record the current value
-// of HackForDefaultTemplateArg::AllowNonCanonicalSubst
-// and set it to true.
-HackForDefaultTemplateArg::HackForDefaultTemplateArg() :
-  OldValue(HackForDefaultTemplateArg::AllowNonCanonicalSubstEnabled)
-{
-  AllowNonCanonicalSubstEnabled = true;
-}
+  // Default constructor, record the current value
+  // of HackForDefaultTemplateArg::AllowNonCanonicalSubst
+  // and set it to true.
+  HackForDefaultTemplateArg::HackForDefaultTemplateArg() :
+    OldValue(HackForDefaultTemplateArg::AllowNonCanonicalSubstEnabled)
+  {
+    AllowNonCanonicalSubstEnabled = true;
+  }
 
-// Destructor, restore the previous value of
-// HackForDefaultTemplateArg::AllowNonCanonicalSubst.
-HackForDefaultTemplateArg::~HackForDefaultTemplateArg()
-{
-  AllowNonCanonicalSubstEnabled = OldValue;
-}
+  // Destructor, restore the previous value of
+  // HackForDefaultTemplateArg::AllowNonCanonicalSubst.
+  HackForDefaultTemplateArg::~HackForDefaultTemplateArg()
+  {
+    AllowNonCanonicalSubstEnabled = OldValue;
+  }
 
-// Return the current value of
-// HackForDefaultTemplateArg::AllowNonCanonicalSubst.
-bool HackForDefaultTemplateArg::AllowNonCanonicalSubst()
-{
-  return AllowNonCanonicalSubstEnabled;
+  // Return the current value of
+  // HackForDefaultTemplateArg::AllowNonCanonicalSubst.
+  bool HackForDefaultTemplateArg::AllowNonCanonicalSubst()
+  {
+    return cling::isROOT() ? AllowNonCanonicalSubstEnabled : false;
+  }
 }
 
 // Exported for use by Parser.
@@ -2097,7 +2100,8 @@ bool Sema::CheckTemplateParameterList(TemplateParameterList *NewParams,
       Invalid = true;
     }
 
-    if (RedundantDefaultArg &&
+    const bool ROOT = cling::isROOT();
+    if (ROOT && RedundantDefaultArg &&
         (((*OldParam)->hasAttr<AnnotateAttr>() &&
          (*OldParam)->getAttr<AnnotateAttr>()->getAnnotation() == "rootmap") ||
         ((*NewParam)->hasAttr<AnnotateAttr>() &&
@@ -2109,10 +2113,11 @@ bool Sema::CheckTemplateParameterList(TemplateParameterList *NewParams,
       //   A template-parameter shall not be given default arguments
       //   by two different declarations in the same scope.
 
-#if 0 // Disable until Diag is rewired
-      Diag(NewDefaultLoc, diag::err_template_param_default_arg_redefinition);
-      Diag(OldDefaultLoc, diag::note_template_param_prev_default_arg);
-#endif
+      // CLING: Disable until Diag is rewired
+      if (!ROOT) {
+        Diag(NewDefaultLoc, diag::err_template_param_default_arg_redefinition);
+        Diag(OldDefaultLoc, diag::note_template_param_prev_default_arg);
+      }
       Invalid = true;
     } else if (MissingDefaultArg && TPC != TPC_FunctionTemplate) {
       // C++ [temp.param]p11:
@@ -3996,7 +4001,7 @@ bool Sema::CheckTemplateTypeArgument(TemplateTypeParmDecl *Param,
   if (CheckTemplateArgument(Param, TSI))
     return true;
 
-  if (HackForDefaultTemplateArg::AllowNonCanonicalSubst())
+  if (cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst())
     ArgType = ArgType.getCanonicalType();
   else
   // Add the converted template type argument.
@@ -5124,7 +5129,7 @@ bool Sema::CheckTemplateArgument(TemplateTypeParmDecl *Param,
 
   if (Arg->isVariablyModifiedType()) {
     return Diag(SR.getBegin(), diag::err_variably_modified_template_arg) << Arg;
-  } else if (!HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
+  } else if (!cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst()) {
     if (Context.hasSameUnqualifiedType(Arg, Context.OverloadTy)) {
       return Diag(SR.getBegin(), diag::err_template_arg_overload_type) << SR;
     }
@@ -5142,7 +5147,7 @@ bool Sema::CheckTemplateArgument(TemplateTypeParmDecl *Param,
   // a warning.
   if (LangOpts.CPlusPlus11 || Arg->hasUnnamedOrLocalType()) {
     UnnamedLocalNoLinkageFinder Finder(*this, SR);
-    if (HackForDefaultTemplateArg::AllowNonCanonicalSubst())
+    if (cling::HackForDefaultTemplateArg::AllowNonCanonicalSubst())
       (void)Finder.Visit(Arg.getCanonicalType());
     else
     (void)Finder.Visit(Context.getCanonicalType(Arg));
