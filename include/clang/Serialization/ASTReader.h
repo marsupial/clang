@@ -2074,7 +2074,7 @@ public:
   Expr *ReadSubExpr();
 
   /// \brief Reads a token out of a record.
-  Token ReadToken(ModuleFile &M, const RecordDataImpl &Record, unsigned &Idx);
+  Token ReadToken(ModuleFile &M, const RecordDataImpl &Record, unsigned &Idx, bool macro = false);
 
   /// \brief Reads the macro record located at the given offset.
   MacroInfo *ReadMacroRecord(ModuleFile &F, uint64_t Offset);
