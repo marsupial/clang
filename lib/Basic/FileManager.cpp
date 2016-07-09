@@ -19,6 +19,7 @@
 
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/FileSystemStatCache.h"
+#include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/ADT/STLExtras.h"
@@ -512,7 +513,7 @@ bool FileManager::getNoncachedStatValue(StringRef Path,
   return false;
 }
 
-void FileManager::invalidateCache(FileEntry *Entry) {
+void FileManager::invalidateCache(FileEntry *Entry, SourceManager *SM) {
   assert(Entry && "Cannot invalidate a NULL FileEntry");
   assert(Entry != NON_EXISTENT_FILE && "Cannot invalidate a missing FileEntry");
   FileEntriesToReread.insert(Entry);
@@ -521,6 +522,7 @@ void FileManager::invalidateCache(FileEntry *Entry) {
   // See if the entry exists as an absolute path as well
   // When the Interpreter loads a file, it does so with an absolute path.
   // So there may be two entries in the cache refering to the same file.
+  // TODO: Handle all the Entries that resolve to AbsPath
   SmallString<512> AbsPath(Entry->getName());
   if (makeAbsolutePath(AbsPath)) {
     auto NamedFileEntItr = SeenFileEntries.find(AbsPath);
@@ -528,6 +530,11 @@ void FileManager::invalidateCache(FileEntry *Entry) {
       FileEntry *AbsEntry = NamedFileEntItr->second;
       assert(AbsEntry != Entry && "invalidateCache same path!");
       if (AbsEntry != NON_EXISTENT_FILE) {
+        if (SM) {
+          FileID FID = SM->translateFile(AbsEntry);
+          if (FID.isValid())
+            SM->invalidateCache(FID, false);
+        }
         FileEntriesToReread.insert(AbsEntry);
         AbsEntry->IsValid = false;
       } else
