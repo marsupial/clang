@@ -288,6 +288,10 @@ public:
   /// required, which is (almost) never.
   StringRef getCanonicalName(const DirectoryEntry *Dir);
 
+  /// \brief Cling can use this information to avoid a re-stat.
+  ///
+  unsigned nextFileID() const { return NextFileUID; }
+
   void PrintStats() const;
 };
 
