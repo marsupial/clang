@@ -715,7 +715,9 @@ public:
 
   void clearIDTables();
 
-  void invalidateCache(FileID FID);
+  /// CLING: Call FileManager::invalidateCache with the entry, used to avoid
+  /// recursion.
+  void invalidateCache(FileID FID, bool callFM = true);
 
   DiagnosticsEngine &getDiagnostics() const { return Diag; }
 
