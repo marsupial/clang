@@ -41,6 +41,7 @@ namespace clang {
 
 class FileSystemStatCache;
 class HeaderSearch;
+class SourceManager;
 
 /// \brief Cached information about one directory (either on disk or in
 /// the virtual file system).
@@ -258,7 +259,8 @@ public:
                              vfs::Status &Result);
 
   /// \brief Remove the real file \p Entry from the cache.
-  void invalidateCache(FileEntry *Entry);
+  /// CLING: Invalidate any abs paths referencing the same file in SourceManager
+  void invalidateCache(FileEntry *Entry, SourceManager *SrcManger = nullptr);
 
   /// \brief If path is not absolute and FileSystemOptions set the working
   /// directory, the path is modified to be relative to the given

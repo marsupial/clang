@@ -406,7 +406,7 @@ void SourceManager::clearIDTables() {
   createExpansionLoc(SourceLocation(),SourceLocation(),SourceLocation(), 1);
 }
 
-void SourceManager::invalidateCache(FileID FID) {
+void SourceManager::invalidateCache(FileID FID, bool callFM) {
   const FileEntry* Entry = getFileEntryForID(FID);
   if (!Entry)
     return;
@@ -422,7 +422,8 @@ void SourceManager::invalidateCache(FileID FID) {
       CC->replaceBuffer(0, /*free*/true);
     }
   }
-  getFileManager().invalidateCache(const_cast<FileEntry*>(Entry));
+  if (callFM)
+    getFileManager().invalidateCache(const_cast<FileEntry*>(Entry), this);
 }
 
 /// getOrCreateContentCache - Create or return a cached ContentCache for the
