@@ -514,6 +514,23 @@ void FileManager::invalidateCache(FileEntry *Entry) {
   assert(Entry != NON_EXISTENT_FILE && "Cannot invalidate a missing FileEntry");
   FileEntriesToReread.insert(Entry);
   Entry->IsValid = false;
+
+  // See if the entry exists as an absolute path as well
+  // When the Interpreter loads a file, it does so with an absolute path.
+  // So there may be two entries in the cache refering to the same file.
+  SmallString<512> AbsPath(Entry->getName());
+  if (makeAbsolutePath(AbsPath)) {
+    auto NamedFileEntItr = SeenFileEntries.find(AbsPath);
+    if (NamedFileEntItr != SeenFileEntries.end() ) {
+      FileEntry *AbsEntry = NamedFileEntItr->second;
+      assert(AbsEntry != Entry && "invalidateCache same path!");
+      if (AbsEntry != NON_EXISTENT_FILE) {
+        FileEntriesToReread.insert(AbsEntry);
+        AbsEntry->IsValid = false;
+      } else
+        SeenFileEntries.erase(AbsPath);
+    }
+  }
 }
 
 
