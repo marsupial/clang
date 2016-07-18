@@ -2321,6 +2321,7 @@ public:
 
   friend class ASTDeclReader;
   friend class ASTDeclWriter;
+  friend class ::cling::DeclUnloader;
 };
 
 class ObjCImplDecl : public ObjCContainerDecl {
