@@ -1221,6 +1221,8 @@ bool DeclContext::containsDecl(Decl *D) const {
           (D->NextInContextAndBits.getPointer() || D == LastDecl));
 }
 
+static bool shouldBeHidden(NamedDecl *D);
+
 void DeclContext::removeDecl(Decl *D, llvm::SmallVector<DeclContext*,4> *errs) {
   assert(D->getLexicalDeclContext() == this &&
          "decl being removed from non-lexical context");
@@ -1252,7 +1254,7 @@ void DeclContext::removeDecl(Decl *D, llvm::SmallVector<DeclContext*,4> *errs) {
     NamedDecl *ND = cast<NamedDecl>(D);
 
     // Remove only decls that have a name or registered in the lookup.
-    if (!ND->getDeclName() || ND->isHidden()) return;
+    if (!ND->getDeclName() || ND->isHidden() || shouldBeHidden(ND)) return;
 
     auto *DC = D->getDeclContext();
     do {
