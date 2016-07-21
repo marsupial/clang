@@ -35,6 +35,10 @@
 #include "llvm/Support/Compiler.h"
 #include <cstdarg>
 
+#ifdef CLING_OBJC_SUPPORT
+  #include "clang/CodeGen/IObjCLookup.h"
+#endif
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -1115,6 +1119,17 @@ llvm::Value *CGObjCGNU::EmitNSAutoreleasePoolClassRef(CodeGenFunction &CGF) {
 
 llvm::Value *CGObjCGNU::GetSelector(CodeGenFunction &CGF, Selector Sel,
                                     const std::string &TypeEncoding) {
+#ifdef CLING_OBJC_SUPPORT
+  if (cling::objectivec::gInstance) {
+    return llvm::Constant::getIntegerValue(
+                  PtrToInt8Ty,
+                  llvm::APInt(
+                      sizeof(uintptr_t) * 8,
+                      uintptr_t(cling::objectivec::gInstance->getSelector(
+                          Sel.getAsString().c_str()))));
+  }
+#endif
+
   SmallVectorImpl<TypedSelector> &Types = SelectorTable[Sel];
   llvm::GlobalAlias *SelValue = nullptr;
 
@@ -1264,10 +1279,20 @@ ConstantAddress CGObjCGNU::GenerateConstantString(const StringLiteral *SL) {
 
   llvm::Constant *isa = TheModule.getNamedGlobal(Sym);
 
-  if (!isa)
+  if (!isa) {
+#ifdef CLING_OBJC_SUPPORT
+    if (cling::objectivec::gInstance) {
+      void *CP = cling::objectivec::gInstance->getClass(StringClass.str().c_str());
+      if (CP) {
+        isa = llvm::Constant::getIntegerValue(PtrToIdTy,
+                      llvm::APInt(sizeof(uintptr_t) * 8, uintptr_t(CP)));
+      }
+    }
+    if (!isa)
+#endif
     isa = new llvm::GlobalVariable(TheModule, IdTy, /* isConstant */false,
             llvm::GlobalValue::ExternalWeakLinkage, nullptr, Sym);
-  else if (isa->getType() != PtrToIdTy)
+  } else if (isa->getType() != PtrToIdTy)
     isa = llvm::ConstantExpr::getBitCast(isa, PtrToIdTy);
 
   std::vector<llvm::Constant*> Ivars;
@@ -2472,6 +2497,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
     llvm::ArrayType *StaticsListArrayTy =
       llvm::ArrayType::get(StaticsListPtrTy, 2);
     Elements.clear();
+
     Elements.push_back(Statics);
     Elements.push_back(llvm::Constant::getNullValue(StaticsListPtrTy));
     Statics = MakeGlobal(StaticsListArrayTy, Elements,
@@ -2606,10 +2632,19 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   // Create the load function calling the runtime entry point with the module
   // structure
+#ifdef CLING_OBJC_SUPPORT
+  // Unique .objc_load_function command for each module
+  llvm::Function * LoadFunction = llvm::Function::Create(
+      llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext), false),
+      llvm::GlobalValue::InternalLinkage, cling::objectivec::gInstance ?
+      TheModule.getName().str() + ".objc_load_function" : ".objc_load_function",
+      &TheModule);
+#else
   llvm::Function * LoadFunction = llvm::Function::Create(
       llvm::FunctionType::get(llvm::Type::getVoidTy(VMContext), false),
       llvm::GlobalValue::InternalLinkage, ".objc_load_function",
       &TheModule);
+#endif
   llvm::BasicBlock *EntryBB =
       llvm::BasicBlock::Create(VMContext, "entry", LoadFunction);
   CGBuilderTy Builder(CGM, VMContext);
