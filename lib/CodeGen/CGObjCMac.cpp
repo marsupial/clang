@@ -1080,6 +1080,21 @@ protected:
                                            ObjCTypes.SelectorPtrTy);
   }
 
+  llvm::Constant *
+  getClassConstant(const llvm::StringRef Name,
+                   const ObjCTypesHelper &ObjCTypes) {
+#ifdef CLING_OBJC_SUPPORT
+    using namespace cling::objectivec;
+    if (gInstance) {
+      return llvm::Constant::getIntegerValue(
+          ObjCTypes.ClassPtrTy,
+          llvm::APInt(sizeof(uintptr_t) * 8,
+                      uintptr_t(gInstance->getClass(Name.str().c_str()))));
+    }
+#endif
+    return GetClassName(Name);
+  }
+  
 public:
   CGObjCCommonMac(CodeGen::CodeGenModule &cgm) :
     CGObjCRuntime(cgm), VMContext(cgm.getLLVMContext()) { }
@@ -3476,7 +3491,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
     // Record a reference to the super class.
     LazySymbols.insert(Super->getIdentifier());
 
-    values.addBitCast(GetClassName(Super->getObjCRuntimeNameAsString()),
+    values.addBitCast(getClassConstant(Super->getObjCRuntimeNameAsString(), ObjCTypes),
                       ObjCTypes.ClassPtrTy);
   } else {
     values.addNullPointer(ObjCTypes.ClassPtrTy);
@@ -3531,13 +3546,15 @@ llvm::Constant *CGObjCMac::EmitMetaClass(const ObjCImplementationDecl *ID,
   const ObjCInterfaceDecl *Root = ID->getClassInterface();
   while (const ObjCInterfaceDecl *Super = Root->getSuperClass())
     Root = Super;
-  values.addBitCast(GetClassName(Root->getObjCRuntimeNameAsString()),
+
+  values.addBitCast(getClassConstant(Root->getObjCRuntimeNameAsString(), ObjCTypes),
                     ObjCTypes.ClassPtrTy);
+
   // The super class for the metaclass is emitted as the name of the
   // super class. The runtime fixes this up to point to the
   // *metaclass* for the super class.
   if (ObjCInterfaceDecl *Super = ID->getClassInterface()->getSuperClass()) {
-    values.addBitCast(GetClassName(Super->getObjCRuntimeNameAsString()),
+    values.addBitCast(getClassConstant(Super->getObjCRuntimeNameAsString(), ObjCTypes),
                       ObjCTypes.ClassPtrTy);
   } else {
     values.addNullPointer(ObjCTypes.ClassPtrTy);
@@ -4964,7 +4981,7 @@ llvm::Value *CGObjCMac::EmitClassRefFromId(CodeGenFunction &CGF,
   
   if (!Entry) {
     llvm::Constant *Casted =
-    llvm::ConstantExpr::getBitCast(GetClassName(II->getName()),
+    llvm::ConstantExpr::getBitCast(getClassConstant(II->getName(), ObjCTypes),
                                    ObjCTypes.ClassPtrTy);
     Entry = CreateMetadataVar(
         "OBJC_CLASS_REFERENCES_", Casted,
