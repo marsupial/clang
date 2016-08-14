@@ -2571,8 +2571,12 @@ void Preprocessor::HandleUndefDirective(Token &UndefTok) {
   if (MI->isWarnIfUnused())
     WarnUnusedMacroLocs.erase(MI->getDefinitionLoc());
 
-  appendMacroDirective(MacroNameTok.getIdentifierInfo(),
-                       AllocateUndefMacroDirective(MacroNameTok.getLocation()));
+  UndefMacroDirective *MD =
+      AllocateUndefMacroDirective(MacroNameTok.getLocation());
+  appendMacroDirective(MacroNameTok.getIdentifierInfo(), MD);
+
+  if (Callbacks)
+    Callbacks->MacroDefined(MacroNameTok, MD);
 }
 
 //===----------------------------------------------------------------------===//
