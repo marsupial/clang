@@ -1610,3 +1610,26 @@ std::string HeaderSearch::suggestPathToFileForDiagnostics(const FileEntry *File,
     *IsSystem = BestPrefixLength ? BestSearchDir >= SystemDirIdx : false;
   return Name.drop_front(BestPrefixLength);
 }
+
+void HeaderSearch::AddSearchPath(const DirectoryLookup &dir, bool isAngled) {
+  unsigned idx = isAngled ? SystemDirIdx : AngledDirIdx;
+  SearchDirs.insert(SearchDirs.begin() + idx, dir);
+  if (!isAngled)
+    AngledDirIdx++;
+  SystemDirIdx++;
+
+  const size_t CurSize = SearchDirs.size();
+  for (auto& Entry : LookupFileCache) {
+    LookupFileCacheInfo& Info = Entry.second;
+    // If hit came at or after insertion, we must update
+    // Also covers case of Info.HitIdx = SearchDirs.size() to mark not found
+    if (Info.HitIdx >= idx)
+      ++Info.HitIdx;
+    // Currently we update StartIdx only if there was no hit
+    // If Info.StartIdx is ever changed to actually be the StartIndex of the
+    // directories to search, then the test should probably be:
+    // if (Info.StartIdx && Info.StartIdx >= idx) --Info.StartIdx;
+    if (Info.StartIdx && Info.HitIdx == CurSize)
+      --Info.StartIdx;
+  }
+}
