@@ -273,13 +273,7 @@ public:
   }
 
   /// \brief Add an additional search path.
-  void AddSearchPath(const DirectoryLookup &dir, bool isAngled) {
-    unsigned idx = isAngled ? SystemDirIdx : AngledDirIdx;
-    SearchDirs.insert(SearchDirs.begin() + idx, dir);
-    if (!isAngled)
-      AngledDirIdx++;
-    SystemDirIdx++;
-  }
+  void AddSearchPath(const DirectoryLookup &dir, bool isAngled);
 
   /// \brief Set the list of system header prefixes.
   void SetSystemHeaderPrefixes(ArrayRef<std::pair<std::string, bool> > P) {
