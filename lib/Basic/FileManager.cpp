@@ -32,7 +32,9 @@
 #include <set>
 #include <string>
 #include <system_error>
-
+#ifndef PATH_MAX
+ #define PATH_MAX 4096
+#endif
 using namespace clang;
 
 /// NON_EXISTENT_DIR - A special value distinct from null that is used to
