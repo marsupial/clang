@@ -431,7 +431,7 @@ CodeCompleteConsumer::~CodeCompleteConsumer() { }
 
 bool PrintingCodeCompleteConsumer::isResultFilteredOut(StringRef Filter,
                                                 CodeCompletionResult Result) {
-  switch (Result.Kind) {
+  switch (static_cast<int>(Result.Kind)) {
   case CodeCompletionResult::RK_Declaration: {
     return !(Result.Declaration->getIdentifier() &&
             Result.Declaration->getIdentifier()->getName().startswith(Filter));
