@@ -15,6 +15,7 @@
 #define LLVM_CLANG_CODEGEN_MODULEBUILDER_H
 
 #include "clang/AST/ASTConsumer.h"
+#include <string>
 
 namespace llvm {
   class Constant;
