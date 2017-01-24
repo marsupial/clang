@@ -15,7 +15,7 @@ set(CLANG_OFFLOAD_BUNDLER_LIB_DEPS
   clangBasic
   )
   
-add_dependencies(clang clang-offload-bundler)
+# add_dependencies(clang clang-offload-bundler)
 
 target_link_libraries(clang-offload-bundler
   ${CLANG_OFFLOAD_BUNDLER_LIB_DEPS}
