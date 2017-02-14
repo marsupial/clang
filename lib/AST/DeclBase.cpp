@@ -1223,7 +1223,7 @@ bool DeclContext::containsDecl(Decl *D) const {
 
 static bool shouldBeHidden(NamedDecl *D);
 
-void DeclContext::removeDecl(Decl *D, llvm::SmallVector<DeclContext*,4> *errs) {
+void DeclContext::removeDecl(Decl *D, llvm::SmallVectorImpl<DeclContext*> *errs) {
   assert(D->getLexicalDeclContext() == this &&
          "decl being removed from non-lexical context");
   assert((D->NextInContextAndBits.getPointer() || D == LastDecl) &&
