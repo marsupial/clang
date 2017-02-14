@@ -2996,6 +2996,7 @@ public:
 
   friend class ASTDeclReader;
   friend class ASTDeclWriter;
+  friend class cling::DeclUnloader;
 };
 
 /// EnumDecl - Represents an enum.  In C++11, enums can be forward-declared
