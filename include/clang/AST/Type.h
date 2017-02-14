@@ -3759,6 +3759,7 @@ class TagType : public Type {
   TagDecl * decl;
 
   friend class ASTReader;
+  friend class ASTContext;  // CLING
 
 protected:
   TagType(TypeClass TC, const TagDecl *D, QualType can);

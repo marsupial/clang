@@ -2711,6 +2711,8 @@ public:
   };
 
   llvm::StringMap<SectionInfo> SectionInfos;
+
+  void forgetDecls(std::set<Decl*>& Decls); // CLING
 };
 
 /// \brief Utility function for constructing a nullary selector.

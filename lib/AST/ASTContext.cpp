@@ -799,6 +799,62 @@ ASTContext::~ASTContext() {
     Value.second->~PerModuleInitializers();
 }
 
+void ASTContext::forgetDecls(std::set<Decl *> &Decls) {
+  if (Decls.empty())
+    return;
+
+  if (size_t Idx = Types.size()) {
+    auto Remove = [&](Decl *D) -> Decl * {
+      auto Itr = Decls.find(D);
+      if (Itr != Decls.end()) {
+        Decls.erase(Itr);
+        Decl *Prev = D->getPreviousDecl();
+        if (Prev)
+          return Prev;
+
+        if (RecordDecl *RecD = dyn_cast<RecordDecl>(D)) {
+          auto &&Itr = ASTRecordLayouts.find(RecD);
+          if (Itr != ASTRecordLayouts.end()) {
+            if (ASTRecordLayout *R = const_cast<ASTRecordLayout *>(Itr->second))
+              R->Destroy(*this);
+            ASTRecordLayouts.erase(Itr);
+          }
+        }
+        if (ObjCContainerDecl *ObjC = dyn_cast<ObjCContainerDecl>(D)) {
+          auto &&Itr = ObjCLayouts.find(ObjC);
+          if (Itr != ObjCLayouts.end()) {
+            if (ASTRecordLayout *R = const_cast<ASTRecordLayout *>(Itr->second))
+              R->Destroy(*this);
+            ObjCLayouts.erase(Itr);
+          }
+        }
+        auto &&Itr = DeclAttrs.find(D);
+        if (Itr != DeclAttrs.end()) {
+          Itr->second->~AttrVec();
+          DeclAttrs.erase(Itr);
+        }
+
+        ::operator delete(Types[Idx], *this, sizeof(clang::Type));
+        Types.erase(Types.begin() + Idx);
+      }
+      return nullptr;
+    };
+
+    --Idx;
+    do {
+      if (const clang::TagType *Tag = Types[Idx]->getAs<clang::TagType>()) {
+        if (Decl *Prev = Remove(Tag->decl))
+          const_cast<clang::TagType *>(Tag)->decl = cast<TagDecl>(Prev);
+      } else if (const clang::TypedefType *Type =
+                     Types[Idx]->getAs<clang::TypedefType>()) {
+        if (Decl *Prev = Remove(Type->Decl))
+          const_cast<clang::TypedefType *>(Type)->Decl =
+              cast<TypedefNameDecl>(Prev);
+      }
+    } while (!Decls.empty() && Idx--);
+  }
+}
+
 void ASTContext::ReleaseParentMapEntries() {
   if (!PointerParents) return;
   for (const auto &Entry : *PointerParents) {
