@@ -293,6 +293,8 @@ namespace clang {
     void forgetDecl(const GlobalDecl& GD, llvm::StringRef MangledName) {
       assert(cling::isClient() && "CodeGenerator::forgetDecl called");
       Builder->DeferredDecls.erase(MangledName);
+      CGM().MangledDeclNames.erase(GD);
+      CGM().Manglings.erase(MangledName);
     }
 
     void Initialize(ASTContext &Context) override {
