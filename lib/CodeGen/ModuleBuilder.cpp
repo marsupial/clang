@@ -310,8 +310,17 @@ namespace clang {
       }
     }
 
-    void forgetDecl(const GlobalDecl& GD) {
+    template <class M, class K> static void eraseIt(M& Map, const K& Key) {
+      auto Itr = Map.find(Key);
+      if (Itr != Map.end())
+        Map.erase(Itr);
+    }
+
+    void forgetDecl(const GlobalDecl& GD, const std::string& MangledName) {
       assert(cling::isClient() && "CodeGenerator::forgetDecl called");
+
+      eraseIt(CGM().MangledDeclNames, GD);
+      eraseIt(CGM().Manglings, MangledName);
 
       if (const auto VD = dyn_cast<VarDecl>(GD.getDecl())) {
         if (!VD->isWeak() || !VD->isThisDeclarationADefinition())
@@ -323,7 +332,6 @@ namespace clang {
         return;
       }
       // It's a weak, defined var or function decl.
-      StringRef MangledName = Builder->getMangledName(GD);
       auto IDeferredDecl = Builder->DeferredDecls.find(MangledName);
       if (IDeferredDecl != Builder->DeferredDecls.end()) {
         if (IDeferredDecl->second == GD)
@@ -533,8 +541,8 @@ void CodeGenerator::forgetGlobal(llvm::GlobalValue* GV) {
   static_cast<CodeGeneratorImpl*>(this)->forgetGlobal(GV);
 }
 
-void CodeGenerator::forgetDecl(const GlobalDecl& GD) {
-  static_cast<CodeGeneratorImpl*>(this)->forgetDecl(GD);
+void CodeGenerator::forgetDecl(const GlobalDecl& GD, const std::string& MngNm) {
+  static_cast<CodeGeneratorImpl*>(this)->forgetDecl(GD, MngNm);
 }
 
 
