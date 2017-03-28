@@ -2011,7 +2011,7 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       // Look for a declaration that's lexically in a record.
       for (const auto *FD = cast<FunctionDecl>(D)->getMostRecentDecl(); FD;
            FD = FD->getPreviousDecl()) {
-        if (isa<CXXRecordDecl>(FD->getLexicalDeclContext())) {
+        if (cling::isClient() || isa<CXXRecordDecl>(FD->getLexicalDeclContext())) {
           if (FD->doesThisDeclarationHaveABody()) {
             addDeferredDeclToEmit(F, GD.getWithDecl(FD));
             break;
