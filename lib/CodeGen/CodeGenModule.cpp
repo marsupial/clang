@@ -371,15 +371,36 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
                                                       << Mismatched;
 }
 
-void CodeGenModule::addEmittedDeferredDecl(StringRef Name, GlobalDecl& GD) {
-  if (cling::isClient())
-    EmittedDeferredDecls[Name] = GD;
+namespace {
+  struct StaticVarFunctionVisitor
+      : public RecursiveASTVisitor<StaticVarFunctionVisitor> {
+    bool SafeToInline = true;
+
+    bool VisitVarDecl(VarDecl *VD) {
+      SafeToInline = !VD->isStaticLocal();
+      return SafeToInline;
+    }
+    StaticVarFunctionVisitor(const FunctionDecl* F) {
+      TraverseFunctionDecl(const_cast<FunctionDecl*>(F));
+    }
+    operator bool () const { return SafeToInline; }
+  };
 }
 
 void CodeGenModule::Release() {
   EmitDeferred();
-  DeferredDecls.insert(EmittedDeferredDecls.begin(),
-                       EmittedDeferredDecls.end());
+  for (auto Emtd : EmittedDeferredDecls) {
+    // If getMangledName fails (Windows), DeferredDecls has to map with string
+    // Can't use Emtd.first->getName() as Emtd.first may be destroyed.
+    llvm::StringRef MangledName = getMangledName(Emtd.second);
+    DeferredDecls[MangledName] = Emtd.second;
+    if (const FunctionDecl* F = dyn_cast<FunctionDecl>(Emtd.second.getDecl())) {
+      if (Emtd.first->getLinkage() != llvm::GlobalValue::LinkOnceAnyLinkage &&
+          shouldEmitFunction(Emtd.second) && !StaticVarFunctionVisitor(F)) {
+        Emtd.first->setLinkage(llvm::GlobalValue::LinkOnceAnyLinkage);
+      }
+    }
+  }
   EmittedDeferredDecls.clear();
   applyGlobalValReplacements();
   applyReplacements();
@@ -1349,7 +1370,7 @@ void CodeGenModule::EmitDeferred() {
     // Otherwise, emit the definition and move on to the next one.
     EmitGlobalDefinition(D, GV);
     if (cling::isROOT())
-      addEmittedDeferredDecl(GV->getName(), D);
+      EmittedDeferredDecls.emplace(GV, D);
 
     // If we found out that we need to emit more decls, do that recursively.
     // This has the advantage that the decls are emitted in a DFS and related
@@ -1684,12 +1705,10 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   if (llvm::GlobalValue *GV = GetGlobalValue(MangledName)) {
     // The value has already been used and should therefore be emitted.
     addDeferredDeclToEmit(GV, GD);
-    addEmittedDeferredDecl(MangledName, GD);
   } else if (MustBeEmitted(Global)) {
     // The value must be emitted, but cannot be emitted eagerly.
     assert(!MayBeEmittedEagerly(Global));
     addDeferredDeclToEmit(/*GV=*/nullptr, GD);
-    addEmittedDeferredDecl(MangledName, GD);
   } else {
     // Otherwise, remember that we saw a deferred decl with this name.  The
     // first use of the mangled name will cause it to move into
@@ -1993,7 +2012,6 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
       // DeferredDeclsToEmit list, and remove it from DeferredDecls (since we
       // don't need it anymore).
       addDeferredDeclToEmit(F, DDI->second);
-      addEmittedDeferredDecl(DDI->first, DDI->second);
       DeferredDecls.erase(DDI);
 
       // Otherwise, there are cases we have to worry about where we're
@@ -2013,7 +2031,8 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
            FD = FD->getPreviousDecl()) {
         if (cling::isClient() || isa<CXXRecordDecl>(FD->getLexicalDeclContext())) {
           if (FD->doesThisDeclarationHaveABody()) {
-            addDeferredDeclToEmit(F, GD.getWithDecl(FD));
+            GD = GD.getWithDecl(FD);
+            addDeferredDeclToEmit(F, GD);
             break;
           }
         }
@@ -2191,7 +2210,6 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     // Move the potentially referenced deferred decl to the DeferredDeclsToEmit
     // list, and remove it from DeferredDecls (since we don't need it anymore).
     addDeferredDeclToEmit(GV, DDI->second);
-    addEmittedDeferredDecl(DDI->first, DDI->second);
     DeferredDecls.erase(DDI);
   }
 

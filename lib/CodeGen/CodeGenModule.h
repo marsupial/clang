@@ -308,7 +308,7 @@ private:
   /// for emission and therefore should only be output if they are actually
   /// used. If a decl is in this, then it is known to have not been referenced
   /// yet.
-  std::map<StringRef, GlobalDecl> DeferredDecls;
+  std::map<llvm::StringRef, GlobalDecl> DeferredDecls;
 
   /// This is a list of deferred decls which we have seen that *are* actually
   /// referenced. These get code generated when the module is done.
@@ -320,11 +320,11 @@ private:
   std::vector<DeferredGlobal> DeferredDeclsToEmit;
   void addDeferredDeclToEmit(llvm::GlobalValue *GV, GlobalDecl GD) {
     DeferredDeclsToEmit.emplace_back(GV, GD);
+    if (GV && cling::isClient()) EmittedDeferredDecls.emplace(GV, GD);
   }
 
   /// Decls that were DeferredDecls and have now been emitted.
-  std::map<StringRef, GlobalDecl> EmittedDeferredDecls;
-  void addEmittedDeferredDecl(StringRef, GlobalDecl& GD);
+  std::unordered_map<llvm::GlobalValue*, GlobalDecl> EmittedDeferredDecls;
 
   /// List of alias we have emitted. Used to make sure that what they point to
   /// is defined once we get to the end of the of the translation unit.

@@ -172,7 +172,7 @@ namespace clang {
       out << " DeferredDecls (llvm::StringMap<GlobalDecl>)\n";
       for(auto I = Builder->DeferredDecls.begin(),
             E = Builder->DeferredDecls.end(); I != E; ++I) {
-        out << I->first.str().c_str();
+        out << I->first;
         I->second.getDecl()->print(out);
         out << "\n";
       }
@@ -272,6 +272,12 @@ namespace clang {
       out.flush();
     }
 
+    template <class M, class K> static void eraseIt(M& Map, const K& Key) {
+      auto Itr = Map.find(Key);
+      if (Itr != Map.end())
+        Map.erase(Itr);
+    }
+
     void forgetGlobal(llvm::GlobalValue* GV) {
       assert(cling::isClient() && "CodeGenerator::forgetGlobal called");
 
@@ -283,46 +289,20 @@ namespace clang {
         }
       }
 
-      if (GV->isWeakForLinker() && GV->isDeclaration()) {
-        // might be an entry in the deferred decls, if so: remove!
-        auto IDeferredDecl = Builder->DeferredDecls.find(GV->getName());
-        if (IDeferredDecl != Builder->DeferredDecls.end()) {
-          // yes, pointer comparison.
-          if (IDeferredDecl->first.data() == GV->getName().data())
-            Builder->DeferredDecls.erase(IDeferredDecl);
-        }
-      }
-    }
-
-    template <class M, class K> static void eraseIt(M& Map, const K& Key) {
-      auto Itr = Map.find(Key);
-      if (Itr != Map.end())
-        Map.erase(Itr);
+      // Don't do this (see test/CodeGeneration/Statics.C
+      // might be an entry in the deferred decls, if so: remove!
+      // if (GV->isWeakForLinker() && !GV->isDeclaration())
+      //  eraseIt(Builder->DeferredDecls, GV->getName());
     }
 
     void forgetDecl(const GlobalDecl& GD, const std::string& MangledName) {
       assert(cling::isClient() && "CodeGenerator::forgetDecl called");
 
-      if (!MangledName.empty()) {
-        eraseIt(CGM().MangledDeclNames, GD);
-        eraseIt(CGM().Manglings, MangledName);
-      }
-
-      if (const auto VD = dyn_cast<VarDecl>(GD.getDecl())) {
-        if (!VD->isWeak() || !VD->isThisDeclarationADefinition())
-          return;
-      } else if (const auto FD = dyn_cast<FunctionDecl>(GD.getDecl())) {
-        if (!FD->isWeak() || !FD->isThisDeclarationADefinition())
-          return;
-      } else {
-        return;
-      }
-      // It's a weak, defined var or function decl.
-      auto IDeferredDecl = Builder->DeferredDecls.find(MangledName);
-      if (IDeferredDecl != Builder->DeferredDecls.end()) {
-        if (IDeferredDecl->second == GD)
-          Builder->DeferredDecls.erase(IDeferredDecl);
-      }
+      // Do this first as DeferredDecls key might be in MangledDeclNames
+      // which is erased below.
+      eraseIt(Builder->DeferredDecls, MangledName);
+      eraseIt(CGM().MangledDeclNames, GD);
+      eraseIt(CGM().Manglings, MangledName);
     }
 
     void Initialize(ASTContext &Context) override {
