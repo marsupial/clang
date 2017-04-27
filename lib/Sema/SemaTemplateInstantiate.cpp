@@ -2465,10 +2465,10 @@ getPatternForClassTemplateSpecialization(
     //      from the primary template.
 
     // Try first to get it externally:
-    if(getExternalSource()) {
-      getExternalSource()->CompleteType(ClassTemplateSpec);
+    if(ExternalSemaSource *ExtSrc = S.getExternalSource()) {
+      ExtSrc->CompleteType(ClassTemplateSpec);
       if (ClassTemplateSpec->getDefinition())
-        return false; // happyness
+        return nullptr; // happyness
     }
 
     ClassTemplateDecl *OrigTemplate = Template;
